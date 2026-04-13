@@ -1,11 +1,8 @@
 #include "mpvobject.h"
 
-#include <cstdio>
 #include <stdexcept>
 
 #include <QGuiApplication>
-#include <QJsonDocument>
-#include <QJsonObject>
 #include <QMetaObject>
 #include <QOpenGLContext>
 #include <QQuickOpenGLUtils>
@@ -42,6 +39,14 @@ void applyNetworkOptions(mpv_handle *mpv)
     } else if (!cookie.isEmpty()) {
         const QString cookieHeader = QStringLiteral("Cookie: %1").arg(cookie);
         mpv_set_option_string(mpv, "http-header-fields", cookieHeader.toUtf8().constData());
+    }
+}
+
+void applyIpcServerOption(mpv_handle *mpv)
+{
+    const QString ipcServer = qEnvironmentVariable("LZCPLAYER_MPV_IPC");
+    if (!ipcServer.isEmpty()) {
+        mpv_set_option_string(mpv, "input-ipc-server", ipcServer.toUtf8().constData());
     }
 }
 
@@ -143,16 +148,16 @@ MpvObject::MpvObject(QQuickItem *parent)
     , m_playbackSpeed(1.0)
     , m_volume(100.0)
     , m_subtitleId(0)
-    , m_ipcEnabled(qEnvironmentVariableIntValue("LZCPLAYER_IPC_STDOUT") > 0)
 {
     if (!mpv) {
         throw std::runtime_error("could not create mpv context");
     }
 
-    mpv_set_option_string(mpv, "terminal", m_ipcEnabled ? "no" : "yes");
-    mpv_set_option_string(mpv, "msg-level", m_ipcEnabled ? "all=warn" : "all=v");
+    mpv_set_option_string(mpv, "terminal", "yes");
+    mpv_set_option_string(mpv, "msg-level", "all=v");
     mpv_set_option_string(mpv, "vo", "libmpv");
     applyNetworkOptions(mpv);
+    applyIpcServerOption(mpv);
 
     if (mpv_initialize(mpv) < 0) {
         throw std::runtime_error("could not initialize mpv context");
@@ -258,8 +263,6 @@ void MpvObject::loadFile(const QString &path)
     }
 
     pendingFile.clear();
-    m_sourceUrl = filePath;
-    emitStateSnapshot();
     mpv::qt::command_variant(mpv, QVariantList{QStringLiteral("loadfile"), filePath});
 }
 
@@ -406,9 +409,6 @@ void MpvObject::processMpvEvents()
             setTimePos(0.0);
             setDuration(0.0);
             setPaused(true);
-            emitIpcEvent(QStringLiteral("ended"), QVariantMap{{QStringLiteral("sourceUrl"), m_sourceUrl}});
-        } else if (event->event_id == MPV_EVENT_FILE_LOADED) {
-            emitStateSnapshot();
         }
     }
 }
@@ -438,7 +438,6 @@ void MpvObject::setVideoFps(double fps)
 
     m_videoFps = fps;
     emit videoFpsChanged();
-    emitIpcEvent(QStringLiteral("videoFps"), fps);
 }
 
 void MpvObject::setPaused(bool paused)
@@ -449,8 +448,6 @@ void MpvObject::setPaused(bool paused)
 
     m_paused = paused;
     emit playingChanged();
-    emitIpcEvent(QStringLiteral("playing"), !m_paused);
-    emitProgressEvent();
 }
 
 void MpvObject::setTimePos(double seconds)
@@ -461,7 +458,6 @@ void MpvObject::setTimePos(double seconds)
 
     m_timePos = seconds;
     emit timePosChanged();
-    emitProgressEvent();
 }
 
 void MpvObject::setDuration(double seconds)
@@ -472,7 +468,6 @@ void MpvObject::setDuration(double seconds)
 
     m_duration = seconds;
     emit durationChanged();
-    emitProgressEvent();
 }
 
 void MpvObject::setPlaybackSpeedValue(double speed)
@@ -483,7 +478,6 @@ void MpvObject::setPlaybackSpeedValue(double speed)
 
     m_playbackSpeed = speed;
     emit playbackSpeedChanged();
-    emitIpcEvent(QStringLiteral("playbackSpeed"), speed);
 }
 
 void MpvObject::setVolumeValue(double volume)
@@ -494,7 +488,6 @@ void MpvObject::setVolumeValue(double volume)
 
     m_volume = volume;
     emit volumeChanged();
-    emitIpcEvent(QStringLiteral("volume"), volume);
 }
 
 void MpvObject::setQualityLabel(const QString &label)
@@ -505,7 +498,6 @@ void MpvObject::setQualityLabel(const QString &label)
 
     m_qualityLabel = label;
     emit qualityLabelChanged();
-    emitIpcEvent(QStringLiteral("qualityLabel"), label);
 }
 
 void MpvObject::setSubtitleTracks(const QVariantList &tracks)
@@ -516,7 +508,6 @@ void MpvObject::setSubtitleTracks(const QVariantList &tracks)
 
     m_subtitleTracks = tracks;
     emit subtitleTracksChanged();
-    emitIpcEvent(QStringLiteral("subtitleTracks"), tracks);
 }
 
 void MpvObject::setSubtitleIdValue(int id)
@@ -528,57 +519,4 @@ void MpvObject::setSubtitleIdValue(int id)
 
     m_subtitleId = normalizedId;
     emit subtitleIdChanged();
-    emitIpcEvent(QStringLiteral("subtitleId"), normalizedId);
-}
-
-void MpvObject::emitIpcEvent(const QString &name, const QVariant &payload) const
-{
-    if (!m_ipcEnabled) {
-        return;
-    }
-
-    QJsonObject event{
-        {QStringLiteral("type"), QStringLiteral("event")},
-        {QStringLiteral("name"), name},
-    };
-    if (payload.isValid()) {
-        event.insert(QStringLiteral("payload"), QJsonValue::fromVariant(payload));
-    }
-
-    const QByteArray json = QJsonDocument(event).toJson(QJsonDocument::Compact);
-    fwrite(json.constData(), 1, static_cast<size_t>(json.size()), stdout);
-    fputc('\n', stdout);
-    fflush(stdout);
-}
-
-void MpvObject::emitProgressEvent() const
-{
-    emitIpcEvent(QStringLiteral("progress"),
-                 QVariantMap{
-                     {QStringLiteral("timePos"), m_timePos},
-                     {QStringLiteral("duration"), m_duration},
-                     {QStringLiteral("playing"), !m_paused},
-                 });
-}
-
-void MpvObject::emitStateSnapshot() const
-{
-    emitIpcEvent(QStringLiteral("snapshot"),
-                 QVariantMap{
-                     {QStringLiteral("sourceUrl"), m_sourceUrl},
-                     {QStringLiteral("playing"), !m_paused},
-                     {QStringLiteral("timePos"), m_timePos},
-                     {QStringLiteral("duration"), m_duration},
-                     {QStringLiteral("playbackSpeed"), m_playbackSpeed},
-                     {QStringLiteral("volume"), m_volume},
-                     {QStringLiteral("qualityLabel"), m_qualityLabel},
-                     {QStringLiteral("subtitleTracks"), m_subtitleTracks},
-                     {QStringLiteral("subtitleId"), m_subtitleId},
-                     {QStringLiteral("videoFps"), m_videoFps},
-                 });
-}
-
-bool MpvObject::isIpcEnabled() const
-{
-    return m_ipcEnabled;
 }

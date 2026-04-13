@@ -82,10 +82,6 @@ private:
     void setQualityLabel(const QString &label);
     void setSubtitleTracks(const QVariantList &tracks);
     void setSubtitleIdValue(int id);
-    void emitIpcEvent(const QString &name, const QVariant &payload = QVariant()) const;
-    void emitProgressEvent() const;
-    void emitStateSnapshot() const;
-    bool isIpcEnabled() const;
 
     mpv_handle *mpv;
     mpv_render_context *mpv_gl;
@@ -99,8 +95,6 @@ private:
     QString m_qualityLabel;
     QVariantList m_subtitleTracks;
     int m_subtitleId;
-    QString m_sourceUrl;
-    bool m_ipcEnabled;
 };
 
 #endif

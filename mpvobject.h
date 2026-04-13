@@ -82,6 +82,7 @@ private:
     mpv_handle *mpv;
     mpv_render_context *mpv_gl;
     QString pendingFile;
+    QString sourceUrl;
     bool m_paused;
     double m_timePos;
     double m_duration;
@@ -90,6 +91,7 @@ private:
     QString m_qualityLabel;
     QVariantList m_subtitleTracks;
     int m_subtitleId;
+    bool m_reachedEof;
 };
 
 #endif

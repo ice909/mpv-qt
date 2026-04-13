@@ -141,12 +141,14 @@ MpvObject::MpvObject(QQuickItem *parent)
     : QQuickFramebufferObject(parent)
     , mpv(mpv_create())
     , mpv_gl(nullptr)
+    , sourceUrl()
     , m_paused(true)
     , m_timePos(0.0)
     , m_duration(0.0)
     , m_playbackSpeed(1.0)
     , m_volume(100.0)
     , m_subtitleId(0)
+    , m_reachedEof(false)
 {
     if (!mpv) {
         throw std::runtime_error("could not create mpv context");
@@ -256,6 +258,8 @@ void MpvObject::loadFile(const QString &path)
     }
 
     pendingFile.clear();
+    sourceUrl = filePath;
+    m_reachedEof = false;
     mpv::qt::command_variant(mpv, QVariantList{QStringLiteral("loadfile"), filePath});
 }
 
@@ -268,6 +272,11 @@ void MpvObject::loadPendingFile()
 
 void MpvObject::togglePause()
 {
+    if (m_reachedEof && !sourceUrl.isEmpty()) {
+        loadFile(sourceUrl);
+        return;
+    }
+
     mpv::qt::set_property_variant(mpv, "pause", !m_paused);
 }
 
@@ -392,9 +401,11 @@ void MpvObject::processMpvEvents()
                 setSubtitleTracks(tracks);
             }
         } else if (event->event_id == MPV_EVENT_END_FILE) {
+            m_reachedEof = true;
             setTimePos(0.0);
-            setDuration(0.0);
             setPaused(true);
+        } else if (event->event_id == MPV_EVENT_FILE_LOADED) {
+            m_reachedEof = false;
         }
     }
 }

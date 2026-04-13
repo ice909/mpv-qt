@@ -3,6 +3,7 @@
 #include <clocale>
 
 #include <QGuiApplication>
+#include <QColor>
 #include <QQmlContext>
 #include <QQuickView>
 #include <QQuickWindow>
@@ -18,6 +19,7 @@ int main(int argc, char **argv)
     qmlRegisterType<MpvObject>("mpvtest", 1, 0, "MpvObject");
 
     QQuickView view;
+    view.setColor(QColor(QStringLiteral("#000000")));
     view.setResizeMode(QQuickView::SizeRootObjectToView);
     view.rootContext()->setContextProperty("initialFile", startupFile);
     view.setSource(QUrl("qrc:/mpvqt/Main.qml"));

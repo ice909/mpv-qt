@@ -79,6 +79,12 @@ Item {
         }
     }
 
+    Rectangle {
+        anchors.fill: parent
+        color: "#000000"
+        z: -1
+    }
+
     HoverHandler {
         onHoveredChanged: {
             if (hovered) {

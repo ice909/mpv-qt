@@ -177,6 +177,7 @@ MpvObject::MpvObject(QQuickItem *parent)
     mpv_observe_property(mpv, 0, "video-params", MPV_FORMAT_NODE);
     mpv_observe_property(mpv, 0, "track-list", MPV_FORMAT_NODE);
     mpv_observe_property(mpv, 0, "sid", MPV_FORMAT_INT64);
+    mpv_observe_property(mpv, 0, "eof-reached", MPV_FORMAT_FLAG);
 
     connect(this, &MpvObject::onUpdate, this, &MpvObject::doUpdate, Qt::QueuedConnection);
 }
@@ -281,9 +282,11 @@ void MpvObject::loadPendingFile()
 
 void MpvObject::togglePause()
 {
-    if (m_reachedEof && !sourceUrl.isEmpty())
+    if (m_reachedEof)
     {
-        loadFile(sourceUrl);
+        mpv::qt::command_variant(
+            mpv, QVariantList{QStringLiteral("seek"), 0, QStringLiteral("absolute+exact")});
+        mpv::qt::set_property_variant(mpv, "pause", false);
         return;
     }
 
@@ -394,6 +397,17 @@ void MpvObject::processMpvEvents()
                 else
                 {
                     setSubtitleIdValue(0);
+                }
+            }
+            else if (qstrcmp(property->name, "eof-reached") == 0)
+            {
+                if (property->format == MPV_FORMAT_FLAG && property->data)
+                {
+                    m_reachedEof = *static_cast<int *>(property->data) != 0;
+                }
+                else
+                {
+                    m_reachedEof = false;
                 }
             }
             else if (qstrcmp(property->name, "video-params") == 0)

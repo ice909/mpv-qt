@@ -16,6 +16,7 @@ class MpvObject : public QQuickFramebufferObject
     Q_PROPERTY(bool playing READ isPlaying NOTIFY playingChanged)
     Q_PROPERTY(double timePos READ timePos NOTIFY timePosChanged)
     Q_PROPERTY(double duration READ duration NOTIFY durationChanged)
+    Q_PROPERTY(qint64 networkSpeed READ networkSpeed NOTIFY networkSpeedChanged)
     Q_PROPERTY(double playbackSpeed READ playbackSpeed NOTIFY playbackSpeedChanged)
     Q_PROPERTY(double volume READ volume NOTIFY volumeChanged)
     Q_PROPERTY(QString qualityLabel READ qualityLabel NOTIFY qualityLabelChanged)
@@ -36,6 +37,7 @@ public:
     bool isPlaying() const;
     double timePos() const;
     double duration() const;
+    qint64 networkSpeed() const;
     double playbackSpeed() const;
     double volume() const;
     QString qualityLabel() const;
@@ -58,6 +60,7 @@ signals:
     void playingChanged();
     void timePosChanged();
     void durationChanged();
+    void networkSpeedChanged();
     void playbackSpeedChanged();
     void volumeChanged();
     void qualityLabelChanged();
@@ -73,6 +76,7 @@ private:
     void setPaused(bool paused);
     void setTimePos(double seconds);
     void setDuration(double seconds);
+    void setNetworkSpeed(qint64 bytesPerSecond);
     void setPlaybackSpeedValue(double speed);
     void setVolumeValue(double volume);
     void setQualityLabel(const QString &label);
@@ -86,6 +90,7 @@ private:
     bool m_paused;
     double m_timePos;
     double m_duration;
+    qint64 m_networkSpeed;
     double m_playbackSpeed;
     double m_volume;
     QString m_qualityLabel;

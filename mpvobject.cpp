@@ -149,7 +149,7 @@ private:
 };
 
 MpvObject::MpvObject(QQuickItem *parent)
-    : QQuickFramebufferObject(parent), mpv(mpv_create()), mpv_gl(nullptr), sourceUrl(), m_paused(true), m_timePos(0.0), m_duration(0.0), m_playbackSpeed(1.0), m_volume(100.0), m_subtitleId(0), m_reachedEof(false)
+    : QQuickFramebufferObject(parent), mpv(mpv_create()), mpv_gl(nullptr), sourceUrl(), m_paused(true), m_timePos(0.0), m_duration(0.0), m_networkSpeed(0), m_playbackSpeed(1.0), m_volume(100.0), m_subtitleId(0), m_reachedEof(false)
 {
     if (!mpv)
     {
@@ -172,6 +172,7 @@ MpvObject::MpvObject(QQuickItem *parent)
     mpv_observe_property(mpv, 0, "pause", MPV_FORMAT_FLAG);
     mpv_observe_property(mpv, 0, "time-pos", MPV_FORMAT_DOUBLE);
     mpv_observe_property(mpv, 0, "duration", MPV_FORMAT_DOUBLE);
+    mpv_observe_property(mpv, 0, "cache-speed", MPV_FORMAT_INT64);
     mpv_observe_property(mpv, 0, "speed", MPV_FORMAT_DOUBLE);
     mpv_observe_property(mpv, 0, "volume", MPV_FORMAT_DOUBLE);
     mpv_observe_property(mpv, 0, "video-params", MPV_FORMAT_NODE);
@@ -217,6 +218,11 @@ double MpvObject::timePos() const
 double MpvObject::duration() const
 {
     return m_duration;
+}
+
+qint64 MpvObject::networkSpeed() const
+{
+    return m_networkSpeed;
 }
 
 double MpvObject::playbackSpeed() const
@@ -372,6 +378,17 @@ void MpvObject::processMpvEvents()
                 else
                 {
                     setDuration(0.0);
+                }
+            }
+            else if (qstrcmp(property->name, "cache-speed") == 0)
+            {
+                if (property->format == MPV_FORMAT_INT64 && property->data)
+                {
+                    setNetworkSpeed(static_cast<qint64>(*static_cast<int64_t *>(property->data)));
+                }
+                else
+                {
+                    setNetworkSpeed(0);
                 }
             }
             else if (qstrcmp(property->name, "speed") == 0)
@@ -538,6 +555,17 @@ void MpvObject::setPlaybackSpeedValue(double speed)
 
     m_playbackSpeed = speed;
     emit playbackSpeedChanged();
+}
+
+void MpvObject::setNetworkSpeed(qint64 bytesPerSecond)
+{
+    if (m_networkSpeed == bytesPerSecond)
+    {
+        return;
+    }
+
+    m_networkSpeed = qMax<qint64>(0, bytesPerSecond);
+    emit networkSpeedChanged();
 }
 
 void MpvObject::setVolumeValue(double volume)

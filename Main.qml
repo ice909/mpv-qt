@@ -45,6 +45,17 @@ Item {
         return pad(minutes) + ":" + pad(secs)
     }
 
+    function formatNetworkSpeed(bytesPerSecond) {
+        const speed = Math.max(0, Number(bytesPerSecond) || 0)
+        if (speed >= 1024 * 1024) {
+            return (speed / (1024 * 1024)).toFixed(2) + " MB/s"
+        }
+        if (speed >= 1024) {
+            return (speed / 1024).toFixed(1) + " KB/s"
+        }
+        return Math.round(speed) + " B/s"
+    }
+
     component ControlButton: Button {
         implicitHeight: 40
         implicitWidth: Math.max(40, contentItem.implicitWidth + 18)
@@ -83,6 +94,43 @@ Item {
         anchors.fill: parent
         color: "#000000"
         z: -1
+    }
+
+    Rectangle {
+        anchors.top: parent.top
+        anchors.right: parent.right
+        anchors.topMargin: 18
+        anchors.rightMargin: 18
+        radius: 14
+        color: "#B8141924"
+        border.width: 1
+        border.color: "#39445F"
+        z: 2
+
+        implicitWidth: speedInfoRow.implicitWidth + 24
+        implicitHeight: speedInfoRow.implicitHeight + 16
+
+        Row {
+            id: speedInfoRow
+            anchors.centerIn: parent
+            spacing: 8
+
+            Rectangle {
+                anchors.verticalCenter: parent.verticalCenter
+                width: 8
+                height: 8
+                radius: 4
+                color: renderer.networkSpeed > 0 ? "#7EA8FF" : "#5A657F"
+            }
+
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: "网速 " + formatNetworkSpeed(renderer.networkSpeed)
+                color: "#F3F6FF"
+                font.pixelSize: 13
+                font.weight: Font.Medium
+            }
+        }
     }
 
     HoverHandler {

@@ -24,6 +24,14 @@ qt_add_resources(lzc-player qml_resources
     PREFIX "/lzc-player"
     FILES
         qml/Main.qml
+        qml/components/ControlButton.qml
+        qml/components/PlaybackControlsBar.qml
+        qml/components/PlaybackProgressBar.qml
+        qml/components/PlaybackSpeedSelector.qml
+        qml/components/QualitySelector.qml
+        qml/components/SubtitleSelector.qml
+        qml/components/VolumeSelector.qml
+        qml/utils/PlayerFormat.js
         assets/icons/play.svg
         assets/icons/pause.svg
         assets/icons/seek-backward.svg

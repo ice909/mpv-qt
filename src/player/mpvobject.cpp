@@ -1,4 +1,4 @@
-#include "mpvobject.h"
+#include "src/player/mpvobject.h"
 
 #include <algorithm>
 #include <stdexcept>

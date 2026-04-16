@@ -14,7 +14,7 @@ export LD_LIBRARY_PATH="${QT_ROOT}/lib:${LD_LIBRARY_PATH:-}"
 export QMAKE="${QT_ROOT}/bin/qmake"
 export VERSION="${VERSION:-0.1}"
 export ARCH="${ARCH:-x86_64}"
-export QML_SOURCES_PATHS="${QML_SOURCES_PATHS:-/src}"
+export QML_SOURCES_PATHS="${QML_SOURCES_PATHS:-/src/qml}"
 export LANG="${LANG:-C.UTF-8}"
 export LC_ALL="${LC_ALL:-C.UTF-8}"
 
@@ -103,7 +103,7 @@ rm -rf "${QT_ROOT}/plugins/sqldrivers"
 linuxdeployqt "${APPDIR}/usr/bin/${APP_NAME}" \
     -executable="${APPDIR}/usr/bin/${APP_NAME}" \
     -bundle-non-qt-libs \
-    -qmldir=/src \
+    -qmldir=/src/qml \
     -appimage \
     -unsupported-allow-new-glibc
 popd >/dev/null

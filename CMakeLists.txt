@@ -13,9 +13,9 @@ find_package(Qt6 REQUIRED COMPONENTS Core Gui Quick OpenGL)
 qt_standard_project_setup(REQUIRES 6.8)
 
 qt_add_executable(lzc-player
-    main.cpp
-    mpvobject.cpp
-    mpvobject.h
+    src/app/main.cpp
+    src/player/mpvobject.cpp
+    src/player/mpvobject.h
 )
 
 set_target_properties(lzc-player PROPERTIES QT_QML_MODULE_NO_IMPORT_SCAN TRUE)
@@ -23,18 +23,18 @@ set_target_properties(lzc-player PROPERTIES QT_QML_MODULE_NO_IMPORT_SCAN TRUE)
 qt_add_resources(lzc-player qml_resources
     PREFIX "/lzc-player"
     FILES
-        Main.qml
-        assets/play.svg
-        assets/pause.svg
-        assets/seek-backward.svg
-        assets/seek-forward.svg
-        assets/subtitle.svg
-        assets/subtitle-hover.svg
-        assets/volume.svg
-        assets/volume-small.svg
-        assets/volume-mute.svg
-        assets/fullscreen.svg
-        assets/quit-fullscreen.svg
+        qml/Main.qml
+        assets/icons/play.svg
+        assets/icons/pause.svg
+        assets/icons/seek-backward.svg
+        assets/icons/seek-forward.svg
+        assets/icons/subtitle.svg
+        assets/icons/subtitle-hover.svg
+        assets/icons/volume.svg
+        assets/icons/volume-small.svg
+        assets/icons/volume-mute.svg
+        assets/icons/fullscreen.svg
+        assets/icons/quit-fullscreen.svg
 )
 
 target_include_directories(lzc-player PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")

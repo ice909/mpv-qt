@@ -1,4 +1,4 @@
-#include "mpvobject.h"
+#include "src/player/mpvobject.h"
 
 #include <clocale>
 #include <initializer_list>
@@ -89,7 +89,7 @@ int main(int argc, char **argv)
     view.setColor(QColor(QStringLiteral("#000000")));
     view.setResizeMode(QQuickView::SizeRootObjectToView);
     view.rootContext()->setContextProperty("initialFile", startupFile);
-    view.setSource(QUrl("qrc:/lzc-player/Main.qml"));
+    view.setSource(QUrl("qrc:/lzc-player/qml/Main.qml"));
     view.show();
 
     return app.exec();

@@ -103,12 +103,12 @@ Item {
     function volumeIconSource() {
         const volume = Math.round(Number(renderer.volume) || 0)
         if (volume <= 0) {
-            return "qrc:/lzc-player/assets/volume-mute.svg"
+            return "qrc:/lzc-player/assets/icons/volume-mute.svg"
         }
         if (volume < 50) {
-            return "qrc:/lzc-player/assets/volume-small.svg"
+            return "qrc:/lzc-player/assets/icons/volume-small.svg"
         }
-        return "qrc:/lzc-player/assets/volume.svg"
+        return "qrc:/lzc-player/assets/icons/volume.svg"
     }
 
     TextMetrics {
@@ -529,22 +529,22 @@ Item {
 
                 ControlButton {
                     iconSource: renderer.playing
-                        ? "qrc:/lzc-player/assets/pause.svg"
-                        : "qrc:/lzc-player/assets/play.svg"
+                        ? "qrc:/lzc-player/assets/icons/pause.svg"
+                        : "qrc:/lzc-player/assets/icons/play.svg"
                     iconSize: 24
                     chromeless: true
                     onClicked: renderer.togglePause()
                 }
 
                 ControlButton {
-                    iconSource: "qrc:/lzc-player/assets/seek-backward.svg"
+                    iconSource: "qrc:/lzc-player/assets/icons/seek-backward.svg"
                     iconSize: 20
                     chromeless: true
                     onClicked: renderer.seekRelative(-10)
                 }
 
                 ControlButton {
-                    iconSource: "qrc:/lzc-player/assets/seek-forward.svg"
+                    iconSource: "qrc:/lzc-player/assets/icons/seek-forward.svg"
                     iconSize: 20
                     chromeless: true
                     onClicked: renderer.seekRelative(10)
@@ -942,8 +942,8 @@ Item {
                             smooth: true
                             mipmap: true
                             source: subtitleButtonHoverHandler.hovered || subtitlePanelVisible
-                                ? "qrc:/lzc-player/assets/subtitle-hover.svg"
-                                : "qrc:/lzc-player/assets/subtitle.svg"
+                                ? "qrc:/lzc-player/assets/icons/subtitle-hover.svg"
+                                : "qrc:/lzc-player/assets/icons/subtitle.svg"
                         }
                     }
                 }
@@ -1097,8 +1097,8 @@ Item {
 
                 ControlButton {
                     iconSource: hostWindow && hostWindow.visibility === Window.FullScreen
-                        ? "qrc:/lzc-player/assets/quit-fullscreen.svg"
-                        : "qrc:/lzc-player/assets/fullscreen.svg"
+                        ? "qrc:/lzc-player/assets/icons/quit-fullscreen.svg"
+                        : "qrc:/lzc-player/assets/icons/fullscreen.svg"
                     iconSize: 24
                     chromeless: true
                     onClicked: {

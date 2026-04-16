@@ -1,5 +1,6 @@
 import QtQuick
 import QtQml
+import QtQuick.Controls
 
 import "../utils/PlayerFormat.js" as PlayerFormat
 
@@ -9,35 +10,41 @@ Item {
     required property var renderer
     required property var playbackSpeedOptions
     required property real reservedWidth
-    readonly property bool panelVisible:
-        speedButtonHoverHandler.hovered || speedGapMouseArea.containsMouse || speedPanelHoverHandler.hovered
+    readonly property bool panelVisible: speedPopup.visible
 
     implicitWidth: reservedWidth
     implicitHeight: Math.max(24, speedButtonLabel.implicitHeight)
 
-    Rectangle {
-        id: speedPanel
-        visible: speedSelector.panelVisible
-        anchors.horizontalCenter: speedTrigger.horizontalCenter
-        anchors.bottom: speedTrigger.top
-        anchors.bottomMargin: 8
+    Timer {
+        id: closeTimer
+        interval: 150
+        onTriggered: speedPopup.close()
+    }
+
+    Popup {
+        id: speedPopup
+        x: speedTrigger.x + (speedTrigger.width - width) / 2
+        y: speedTrigger.y - height - 8
         width: 96
         height: speedOptionsColumn.implicitHeight + 16
-        radius: 10
-        color: "#141924"
-        border.width: 1
-        border.color: Qt.rgba(1, 1, 1, 0.15)
-        z: 2
+        padding: 0
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
 
         HoverHandler {
-            id: speedPanelHoverHandler
+            onHoveredChanged: hovered ? closeTimer.stop() : closeTimer.start()
         }
 
-        Column {
+        background: Rectangle {
+            radius: 10
+            color: "#141924"
+            border.width: 1
+            border.color: Qt.rgba(1, 1, 1, 0.15)
+        }
+
+        contentItem: Column {
             id: speedOptionsColumn
-            x: 8
-            y: 8
-            width: parent.width - 16
+            anchors.fill: parent
+            anchors.margins: 8
             spacing: 4
 
             Repeater {
@@ -83,21 +90,14 @@ Item {
                         anchors.fill: parent
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
-                        onClicked: speedSelector.renderer.setPlaybackSpeed(parent.modelData.value)
+                        onClicked: {
+                            speedSelector.renderer.setPlaybackSpeed(parent.modelData.value)
+                            speedPopup.close()
+                        }
                     }
                 }
             }
         }
-    }
-
-    MouseArea {
-        id: speedGapMouseArea
-        anchors.right: speedPanel.right
-        anchors.bottom: speedTrigger.top
-        width: speedPanel.width
-        height: speedPanel.anchors.bottomMargin
-        hoverEnabled: true
-        acceptedButtons: Qt.NoButton
     }
 
     Item {
@@ -110,6 +110,14 @@ Item {
         HoverHandler {
             id: speedButtonHoverHandler
             cursorShape: Qt.PointingHandCursor
+            onHoveredChanged: {
+                if (hovered) {
+                    closeTimer.stop()
+                    speedPopup.open()
+                } else {
+                    closeTimer.start()
+                }
+            }
         }
 
         Text {

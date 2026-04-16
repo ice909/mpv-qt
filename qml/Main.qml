@@ -120,7 +120,7 @@ Item {
 
             Text {
                 anchors.verticalCenter: parent.verticalCenter
-                text: "网速 " + PlayerFormat.formatNetworkSpeed(renderer.networkSpeed)
+                text: PlayerFormat.formatNetworkSpeed(renderer.networkSpeed)
                 color: "#F3F6FF"
                 font.pixelSize: 13
                 font.weight: Font.Medium

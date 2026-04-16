@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Controls
 
 import "../utils/PlayerFormat.js" as PlayerFormat
 
@@ -6,32 +7,41 @@ Item {
     id: volumeSelector
 
     required property var renderer
-    readonly property bool panelVisible:
-        volumeButtonHoverHandler.hovered || volumeGapMouseArea.containsMouse || volumePanelHoverHandler.hovered
+    readonly property bool panelVisible: volumePopup.visible
 
     implicitWidth: 24
     implicitHeight: 24
 
-    Rectangle {
-        id: volumePanel
-        visible: volumeSelector.panelVisible
-        anchors.horizontalCenter: volumeTrigger.horizontalCenter
-        anchors.bottom: volumeTrigger.top
-        anchors.bottomMargin: 8
+    Timer {
+        id: closeTimer
+        interval: 150
+        onTriggered: volumePopup.close()
+    }
+
+    Popup {
+        id: volumePopup
+        x: volumeTrigger.x + (volumeTrigger.width - width) / 2
+        y: volumeTrigger.y - height - 8
         width: 72
         height: 212
-        radius: 10
-        color: "#141924"
-        border.width: 1
-        border.color: Qt.rgba(1, 1, 1, 0.15)
-        z: 2
+        padding: 0
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
 
         HoverHandler {
-            id: volumePanelHoverHandler
+            onHoveredChanged: hovered ? closeTimer.stop() : closeTimer.start()
         }
 
-        Item {
+        background: Rectangle {
+            radius: 10
+            color: "#141924"
+            border.width: 1
+            border.color: Qt.rgba(1, 1, 1, 0.15)
+        }
+
+        contentItem: Item {
             id: volumeBar
+            implicitWidth: 28
+            implicitHeight: 188
             anchors.horizontalCenter: parent.horizontalCenter
             anchors.top: parent.top
             anchors.topMargin: 12
@@ -120,31 +130,29 @@ Item {
         }
     }
 
-    MouseArea {
-        id: volumeGapMouseArea
-        anchors.horizontalCenter: volumePanel.horizontalCenter
-        anchors.bottom: volumeTrigger.top
-        width: volumePanel.width
-        height: volumePanel.anchors.bottomMargin
-        hoverEnabled: true
-        acceptedButtons: Qt.NoButton
-    }
-
     Item {
         id: volumeTrigger
         anchors.centerIn: parent
-        width: 28
-        height: 38
+        width: 24
+        height: 24
 
         HoverHandler {
             id: volumeButtonHoverHandler
             cursorShape: Qt.PointingHandCursor
+            onHoveredChanged: {
+                if (hovered) {
+                    closeTimer.stop()
+                    volumePopup.open()
+                } else {
+                    closeTimer.start()
+                }
+            }
         }
 
         Image {
             anchors.centerIn: parent
-            width: 28
-            height: 28
+            width: 24
+            height: 24
             fillMode: Image.PreserveAspectFit
             smooth: true
             mipmap: true

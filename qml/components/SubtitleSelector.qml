@@ -5,47 +5,73 @@ Item {
     id: subtitleSelector
 
     required property var renderer
-    readonly property bool panelVisible:
-        subtitleButtonHoverHandler.hovered || subtitleGapMouseArea.containsMouse || subtitlePanelHoverHandler.hovered
+    readonly property bool panelVisible: subtitlePopup.visible
+    readonly property real popupEdgePadding: 12
 
     implicitWidth: 24
     implicitHeight: 24
 
-    Rectangle {
-        id: subtitlePanel
-        visible: subtitleSelector.panelVisible
-        anchors.horizontalCenter: subtitleTrigger.horizontalCenter
-        anchors.bottom: subtitleTrigger.top
-        anchors.bottomMargin: 8
+    Timer {
+        id: closeTimer
+        interval: 150
+        onTriggered: subtitlePopup.close()
+    }
+
+    Popup {
+        id: subtitlePopup
+        parent: Overlay.overlay
+        x: {
+            if (!parent) {
+                return 0
+            }
+
+            const preferredX = subtitleTrigger.mapToItem(
+                parent,
+                (subtitleTrigger.width - width) / 2,
+                0
+            ).x
+            const maxX = Math.max(
+                subtitleSelector.popupEdgePadding,
+                parent.width - width - subtitleSelector.popupEdgePadding
+            )
+
+            return Math.max(
+                subtitleSelector.popupEdgePadding,
+                Math.min(preferredX, maxX)
+            )
+        }
+        y: parent
+            ? subtitleTrigger.mapToItem(parent, 0, -height - 8).y
+            : 0
         width: 240
-        height: Math.min(subtitlePanelColumn.implicitHeight + 16, 360)
-        radius: 10
-        color: "#141924"
-        border.width: 1
-        border.color: Qt.rgba(1, 1, 1, 0.15)
-        z: 2
+        height: subtitleContentColumn.implicitHeight + 16
+        padding: 0
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
 
         HoverHandler {
-            id: subtitlePanelHoverHandler
+            onHoveredChanged: hovered ? closeTimer.stop() : closeTimer.start()
         }
 
-        Column {
-            id: subtitlePanelColumn
-            x: 8
-            y: 8
-            width: parent.width - 16
-            spacing: 0
+        background: Rectangle {
+            radius: 10
+            color: "#141924"
+            border.width: 1
+            border.color: Qt.rgba(1, 1, 1, 0.15)
+        }
+
+        contentItem: Column {
+            id: subtitleContentColumn
+            anchors.fill: parent
+            anchors.margins: 8
+            spacing: 8
 
             Item {
                 width: parent.width
-                height: subtitlePanelTitle.implicitHeight + 18
+                height: subtitlePanelTitle.implicitHeight
 
                 Text {
                     id: subtitlePanelTitle
                     anchors.left: parent.left
-                    anchors.leftMargin: 4
-                    anchors.top: parent.top
-                    anchors.topMargin: 4
                     text: "字幕"
                     color: "#FFFFFF"
                     font.pixelSize: 14
@@ -56,7 +82,7 @@ Item {
             ScrollView {
                 id: subtitleScrollView
                 width: parent.width
-                height: Math.min(subtitleOptionsColumn.implicitHeight, 360 - 16 - subtitlePanelTitle.implicitHeight - 18)
+                height: Math.min(subtitleOptionsColumn.implicitHeight, 360 - 16 - subtitlePanelTitle.implicitHeight - subtitleContentColumn.spacing)
                 clip: true
                 ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
 
@@ -115,23 +141,16 @@ Item {
                                 anchors.fill: parent
                                 hoverEnabled: true
                                 cursorShape: Qt.PointingHandCursor
-                                onClicked: subtitleSelector.renderer.setSubtitleId(subtitleOption.modelData.id)
+                                onClicked: {
+                                    subtitleSelector.renderer.setSubtitleId(subtitleOption.modelData.id)
+                                    subtitlePopup.close()
+                                }
                             }
                         }
                     }
                 }
             }
         }
-    }
-
-    MouseArea {
-        id: subtitleGapMouseArea
-        anchors.right: subtitlePanel.right
-        anchors.bottom: subtitleTrigger.top
-        width: subtitlePanel.width
-        height: subtitlePanel.anchors.bottomMargin
-        hoverEnabled: true
-        acceptedButtons: Qt.NoButton
     }
 
     Item {
@@ -143,6 +162,14 @@ Item {
         HoverHandler {
             id: subtitleButtonHoverHandler
             cursorShape: Qt.PointingHandCursor
+            onHoveredChanged: {
+                if (hovered) {
+                    closeTimer.stop()
+                    subtitlePopup.open()
+                } else {
+                    closeTimer.start()
+                }
+            }
         }
 
         Image {

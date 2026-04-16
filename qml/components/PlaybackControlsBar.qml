@@ -65,103 +65,116 @@ Rectangle {
         renderer: controlsBar.renderer
     }
 
-    RowLayout {
-        anchors.fill: parent
+    Item {
+        id: controlsContent
+        anchors.left: parent.left
+        anchors.right: parent.right
         anchors.leftMargin: 10
         anchors.rightMargin: 10
-        spacing: 12
+        anchors.verticalCenter: parent.verticalCenter
+        height: controlsContentRow.implicitHeight
 
         RowLayout {
-            spacing: 16
-            Layout.alignment: Qt.AlignVCenter
+            id: controlsContentRow
+            anchors.fill: parent
+            spacing: 12
 
-            ControlButton {
-                iconSource: controlsBar.renderer.playing
-                    ? "qrc:/lzc-player/assets/icons/pause.svg"
-                    : "qrc:/lzc-player/assets/icons/play.svg"
-                iconSize: 24
-                chromeless: true
-                onClicked: controlsBar.renderer.togglePause()
-            }
-
-            ControlButton {
-                iconSource: "qrc:/lzc-player/assets/icons/seek-backward.svg"
-                iconSize: 20
-                chromeless: true
-                onClicked: controlsBar.renderer.seekRelative(-10)
-            }
-
-            ControlButton {
-                iconSource: "qrc:/lzc-player/assets/icons/seek-forward.svg"
-                iconSize: 20
-                chromeless: true
-                onClicked: controlsBar.renderer.seekRelative(10)
-            }
-
-            Text {
+            RowLayout {
+                spacing: 16
                 Layout.alignment: Qt.AlignVCenter
-                textFormat: Text.RichText
-                color: "#FFFFFF"
-                font.pixelSize: 14
-                font.weight: Font.Medium
-                text: "<span style='color:#FFFFFF;'>"
-                    + PlayerFormat.formatTime(progressBar.shownValue)
-                    + " / </span><span style='color:rgba(255,255,255,0.8);'>"
-                    + PlayerFormat.formatTime(controlsBar.renderer.duration)
-                    + "</span>"
+
+                ControlButton {
+                    Layout.alignment: Qt.AlignVCenter
+                    iconSource: controlsBar.renderer.playing
+                        ? "qrc:/lzc-player/assets/icons/pause.svg"
+                        : "qrc:/lzc-player/assets/icons/play.svg"
+                    iconSize: 24
+                    chromeless: true
+                    onClicked: controlsBar.renderer.togglePause()
+                }
+
+                ControlButton {
+                    Layout.alignment: Qt.AlignVCenter
+                    iconSource: "qrc:/lzc-player/assets/icons/seek-backward.svg"
+                    iconSize: 20
+                    chromeless: true
+                    onClicked: controlsBar.renderer.seekRelative(-10)
+                }
+
+                ControlButton {
+                    Layout.alignment: Qt.AlignVCenter
+                    iconSource: "qrc:/lzc-player/assets/icons/seek-forward.svg"
+                    iconSize: 20
+                    chromeless: true
+                    onClicked: controlsBar.renderer.seekRelative(10)
+                }
+
+                Text {
+                    Layout.alignment: Qt.AlignVCenter
+                    textFormat: Text.RichText
+                    color: "#FFFFFF"
+                    font.pixelSize: 14
+                    font.weight: Font.Medium
+                    text: "<span style='color:#FFFFFF;'>"
+                        + PlayerFormat.formatTime(progressBar.shownValue)
+                        + " / </span><span style='color:rgba(255,255,255,0.8);'>"
+                        + PlayerFormat.formatTime(controlsBar.renderer.duration)
+                        + "</span>"
+                }
             }
-        }
 
-        Item {
-            Layout.fillWidth: true
-        }
+            Item {
+                Layout.fillWidth: true
+            }
 
-        RowLayout {
-            spacing: 16
-            Layout.alignment: Qt.AlignVCenter
-
-            PlaybackSpeedSelector {
-                id: speedSelector
+            RowLayout {
+                spacing: 16
                 Layout.alignment: Qt.AlignVCenter
-                renderer: controlsBar.renderer
-                playbackSpeedOptions: controlsBar.playbackSpeedOptions
-                reservedWidth: controlsBar.speedButtonReservedWidth
-            }
 
-            QualitySelector {
-                id: qualitySelector
-                Layout.alignment: Qt.AlignVCenter
-                renderer: controlsBar.renderer
-                reservedWidth: controlsBar.qualityButtonReservedWidth
-            }
+                PlaybackSpeedSelector {
+                    id: speedSelector
+                    Layout.alignment: Qt.AlignVCenter
+                    renderer: controlsBar.renderer
+                    playbackSpeedOptions: controlsBar.playbackSpeedOptions
+                    reservedWidth: controlsBar.speedButtonReservedWidth
+                }
 
-            SubtitleSelector {
-                id: subtitleSelector
-                Layout.alignment: Qt.AlignVCenter
-                renderer: controlsBar.renderer
-            }
+                QualitySelector {
+                    id: qualitySelector
+                    Layout.alignment: Qt.AlignVCenter
+                    renderer: controlsBar.renderer
+                    reservedWidth: controlsBar.qualityButtonReservedWidth
+                }
 
-            VolumeSelector {
-                id: volumeSelector
-                Layout.alignment: Qt.AlignVCenter
-                renderer: controlsBar.renderer
-            }
+                SubtitleSelector {
+                    id: subtitleSelector
+                    Layout.alignment: Qt.AlignVCenter
+                    renderer: controlsBar.renderer
+                }
 
-            ControlButton {
-                iconSource: controlsBar.hostWindow && controlsBar.hostWindow.visibility === Window.FullScreen
-                    ? "qrc:/lzc-player/assets/icons/quit-fullscreen.svg"
-                    : "qrc:/lzc-player/assets/icons/fullscreen.svg"
-                iconSize: 24
-                chromeless: true
-                onClicked: {
-                    if (!controlsBar.hostWindow) {
-                        return
-                    }
+                VolumeSelector {
+                    id: volumeSelector
+                    Layout.alignment: Qt.AlignVCenter
+                    renderer: controlsBar.renderer
+                }
 
-                    if (controlsBar.hostWindow.visibility === Window.FullScreen) {
-                        controlsBar.hostWindow.showNormal()
-                    } else {
-                        controlsBar.hostWindow.showFullScreen()
+                ControlButton {
+                    Layout.alignment: Qt.AlignVCenter
+                    iconSource: controlsBar.hostWindow && controlsBar.hostWindow.visibility === Window.FullScreen
+                        ? "qrc:/lzc-player/assets/icons/quit-fullscreen.svg"
+                        : "qrc:/lzc-player/assets/icons/fullscreen.svg"
+                    iconSize: 24
+                    chromeless: true
+                    onClicked: {
+                        if (!controlsBar.hostWindow) {
+                            return
+                        }
+
+                        if (controlsBar.hostWindow.visibility === Window.FullScreen) {
+                            controlsBar.hostWindow.showNormal()
+                        } else {
+                            controlsBar.hostWindow.showFullScreen()
+                        }
                     }
                 }
             }

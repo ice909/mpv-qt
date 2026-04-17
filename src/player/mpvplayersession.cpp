@@ -1,9 +1,11 @@
 #include "src/player/mpvplayersession.h"
 
+#include <optional>
 #include <stdexcept>
 
 #include <QGuiApplication>
 #include <QMetaObject>
+#include <QStringList>
 
 #include "src/common/qthelper.hpp"
 #include "src/player/mpvtrackmapper.h"
@@ -34,6 +36,30 @@ void applyIpcServerOption(mpv_handle *mpv)
     {
         mpv_set_option_string(mpv, "input-ipc-server", ipcServer.toUtf8().constData());
     }
+}
+
+std::optional<double> parseTimestampToSeconds(const QString &position)
+{
+    const QStringList parts = position.split(QLatin1Char(':'), Qt::KeepEmptyParts);
+    if (parts.isEmpty() || parts.size() > 3)
+    {
+        return std::nullopt;
+    }
+
+    double totalSeconds = 0.0;
+    for (const QString &part : parts)
+    {
+        bool ok = false;
+        const double value = part.toDouble(&ok);
+        if (!ok || value < 0.0)
+        {
+            return std::nullopt;
+        }
+
+        totalSeconds = (totalSeconds * 60.0) + value;
+    }
+
+    return totalSeconds;
 }
 
 } // namespace
@@ -179,6 +205,11 @@ void MpvPlayerSession::loadFile(const QString &path)
     mpv::qt::command_variant(mpv, QVariantList{QStringLiteral("loadfile"), path});
 }
 
+void MpvPlayerSession::setStartupPosition(const QString &position)
+{
+    m_pendingStartupPosition = position.trimmed();
+}
+
 void MpvPlayerSession::togglePause()
 {
     if (m_reachedEof)
@@ -284,6 +315,7 @@ void MpvPlayerSession::processMpvEvents()
         else if (event->event_id == MPV_EVENT_FILE_LOADED)
         {
             m_reachedEof = false;
+            applyPendingStartupPosition();
         }
     }
 }
@@ -626,4 +658,33 @@ void MpvPlayerSession::setConsoleOpen(bool open)
 
     m_consoleOpen = open;
     emit consoleOpenChanged();
+}
+
+void MpvPlayerSession::applyPendingStartupPosition()
+{
+    if (m_pendingStartupPosition.isEmpty())
+    {
+        return;
+    }
+
+    const QString position = m_pendingStartupPosition;
+    m_pendingStartupPosition.clear();
+
+    if (position.endsWith(QLatin1Char('%')))
+    {
+        bool ok = false;
+        const double percent = position.first(position.size() - 1).toDouble(&ok);
+        if (ok)
+        {
+            mpv::qt::command_variant(
+                mpv, QVariantList{QStringLiteral("seek"), percent, QStringLiteral("absolute-percent+exact")});
+        }
+        return;
+    }
+
+    if (const std::optional<double> seconds = parseTimestampToSeconds(position))
+    {
+        mpv::qt::command_variant(
+            mpv, QVariantList{QStringLiteral("seek"), *seconds, QStringLiteral("absolute+exact")});
+    }
 }

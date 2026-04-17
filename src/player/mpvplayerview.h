@@ -54,6 +54,7 @@ public:
 
 public slots:
     void loadFile(const QString &path);
+    void setStartupPosition(const QString &position);
     void togglePause();
     void seekRelative(double seconds);
     void seekTo(double seconds);

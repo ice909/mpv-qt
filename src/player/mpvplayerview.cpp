@@ -283,6 +283,11 @@ void MpvPlayerView::loadFile(const QString &path)
     m_session->loadFile(path);
 }
 
+void MpvPlayerView::setStartupPosition(const QString &position)
+{
+    m_session->setStartupPosition(position);
+}
+
 void MpvPlayerView::togglePause()
 {
     m_session->togglePause();

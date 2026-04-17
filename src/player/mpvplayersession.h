@@ -50,6 +50,7 @@ public:
 
 public slots:
     void loadFile(const QString &path);
+    void setStartupPosition(const QString &position);
     void togglePause();
     void seekRelative(double seconds);
     void seekTo(double seconds);
@@ -98,6 +99,7 @@ private:
     void setSubtitleTracks(const QVariantList &tracks);
     void setSubtitleIdValue(int id);
     void setConsoleOpen(bool open);
+    void applyPendingStartupPosition();
 
     mpv_handle *mpv;
     bool m_paused;
@@ -115,6 +117,7 @@ private:
     int m_subtitleId;
     bool m_consoleOpen;
     bool m_reachedEof;
+    QString m_pendingStartupPosition;
 };
 
 #endif

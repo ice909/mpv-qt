@@ -25,11 +25,22 @@ void configureCommandLineParser(QCommandLineParser &parser)
         QStringLiteral("cookie"),
         QStringLiteral("HTTP Cookie header value to send with media requests."),
         QStringLiteral("cookie"));
+    const QCommandLineOption startOption(
+        QStringLiteral("start"),
+        QStringLiteral("Seek to given position on startup. Supports percent, seconds, or timestamps like 12:34 and 01:02:03."),
+        QStringLiteral("time"));
 
-    parser.setApplicationDescription(QStringLiteral("Lzc video player"));
+    parser.setApplicationDescription(
+        QStringLiteral("Lzc video player\n"
+                       "\n"
+                       "Examples:\n"
+                       "  lzc-player --start=90 <file>\n"
+                       "  lzc-player --start=12:34 <file>\n"
+                       "  lzc-player --start=50% <file>"));
     parser.addHelpOption();
     parser.addVersionOption();
     parser.addOption(cookieOption);
+    parser.addOption(startOption);
     parser.addPositionalArgument(QStringLiteral("file"), QStringLiteral("Media file or URL to open."));
 }
 
@@ -79,6 +90,7 @@ int main(int argc, char **argv)
 
     const QStringList positionalArguments = parser.positionalArguments();
     const QString startupFile = positionalArguments.isEmpty() ? QString() : positionalArguments.first();
+    const QString startupPosition = parser.value(QStringLiteral("start"));
     app.setProperty("lzcPlayerCookie", parser.value(QStringLiteral("cookie")));
 
     std::setlocale(LC_NUMERIC, "C");
@@ -89,6 +101,7 @@ int main(int argc, char **argv)
     view.setColor(QColor(QStringLiteral("#000000")));
     view.setResizeMode(QQuickView::SizeRootObjectToView);
     view.rootContext()->setContextProperty("initialFile", startupFile);
+    view.rootContext()->setContextProperty("initialStartPosition", startupPosition);
     view.setSource(QUrl("qrc:/lzc-player/qml/Main.qml"));
     view.show();
 

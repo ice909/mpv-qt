@@ -103,6 +103,10 @@ Item {
         Component.onCompleted: {
             mainView.ensureKeyboardFocus()
 
+            if (initialStartPosition) {
+                renderer.setStartupPosition(initialStartPosition)
+            }
+
             if (initialFile) {
                 renderer.loadFile(initialFile)
             }

@@ -147,7 +147,7 @@ copy_dependency_closure() {
 
         while IFS= read -r binary_path; do
             copy_runtime_dependencies "${binary_path}" "${target_dir}"
-        done < <(find "${target_dir}" -type f \( -iname "*.exe" -o -iname "*.dll" \) | sort)
+        done < <(find "${target_dir}" -maxdepth 1 -type f \( -iname "*.exe" -o -iname "*.dll" \) | sort)
 
         copied_this_round="${RUNTIME_DEPENDENCY_COPY_COUNT}"
         if ((copied_this_round == 0)); then
@@ -227,7 +227,7 @@ mkdir -p "${PACKAGE_DIR}" "${DIST_ROOT}"
 cp -f "${EXECUTABLE_PATH}" "${PACKAGE_DIR}/"
 cp -f "${MPV_RUNTIME_DLL}" "${PACKAGE_DIR}/"
 
-windeployqt --release --qmldir "${ROOT_DIR}/qml" "${PACKAGE_DIR}/${APP_NAME}.exe"
+windeployqt --release --no-translations --qmldir "${ROOT_DIR}/qml" "${PACKAGE_DIR}/${APP_NAME}.exe"
 
 copy_if_exists "${QT_ROOT}/bin/libstdc++-6.dll" "${PACKAGE_DIR}"
 copy_if_exists "${QT_ROOT}/bin/libgcc_s_seh-1.dll" "${PACKAGE_DIR}"

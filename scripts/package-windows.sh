@@ -15,6 +15,8 @@ readonly -a MPV_RUNTIME_DLL_NAMES=(
     "zlib1.dll"
     "libdouble-conversion.dll"
     "libbz2-1.dll"
+    "libmd4c.dll"
+    "libb2-1.dll"
     "libbrotlicommon.dll"
     "libbrotlidec.dll"
     "libbrotlienc.dll"

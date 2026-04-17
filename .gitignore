@@ -83,3 +83,6 @@ CMakeLists.txt.user*
 .codex
 output/
 squashfs-root
+dist/
+third_party/mpv/
+playlist.json

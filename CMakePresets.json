@@ -1,0 +1,31 @@
+{
+  "version": 4,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 23,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "msys2-mingw64",
+      "displayName": "MSYS2 MinGW64 Release",
+      "description": "Configure lzc-player for MSYS2 MinGW64 with Qt from MSYSTEM_PREFIX and local libmpv package.",
+      "generator": "MinGW Makefiles",
+      "binaryDir": "${sourceDir}/build/msys2-mingw64",
+      "installDir": "${sourceDir}/dist/msys2-mingw64",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_PREFIX_PATH": "$env{MSYSTEM_PREFIX}",
+        "MPV_ROOT": "${sourceDir}/third_party/mpv"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "build-msys2-mingw64",
+      "displayName": "Build MSYS2 MinGW64",
+      "configurePreset": "msys2-mingw64"
+    }
+  ],
+  "testPresets": []
+}

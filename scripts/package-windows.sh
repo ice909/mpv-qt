@@ -176,11 +176,6 @@ if ! command -v 7z >/dev/null 2>&1; then
     exit 1
 fi
 
-if [[ -z "${QML_IMPORT_ROOT}" ]]; then
-    echo "Qt QML import root not found under ${QT_ROOT}. Install Qt declarative/QML runtime packages." >&2
-    exit 1
-fi
-
 rm -rf "${PACKAGE_DIR}" "${ZIP_PATH}"
 mkdir -p "${PACKAGE_DIR}" "${DIST_ROOT}"
 
@@ -189,7 +184,12 @@ cp -f "${MPV_RUNTIME_DLL}" "${PACKAGE_DIR}/"
 
 windeployqt --release --no-translations --qmldir "${ROOT_DIR}/qml" "${PACKAGE_DIR}/${APP_NAME}.exe"
 write_qt_conf "${PACKAGE_DIR}"
-copy_qml_runtime_modules "${PACKAGE_DIR}" "${QML_IMPORT_ROOT}"
+
+if [[ -n "${QML_IMPORT_ROOT}" ]]; then
+    copy_qml_runtime_modules "${PACKAGE_DIR}" "${QML_IMPORT_ROOT}"
+else
+    echo "Qt QML import root not found under ${QT_ROOT}; skipping manual QML runtime copy." >&2
+fi
 
 copy_if_exists "${QT_ROOT}/bin/libstdc++-6.dll" "${PACKAGE_DIR}"
 copy_if_exists "${QT_ROOT}/bin/libgcc_s_seh-1.dll" "${PACKAGE_DIR}"

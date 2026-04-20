@@ -5,6 +5,8 @@
 #include <mpv/client.h>
 #include <mpv/render_gl.h>
 
+#include <atomic>
+
 #include <QString>
 #include <QStringList>
 #include <QVariant>
@@ -44,6 +46,7 @@ public:
 
     Renderer *createRenderer() const override;
     mpv_handle *mpvHandle() const;
+    void scheduleFrameUpdate();
     void ensureRenderContext();
     void renderFrame(QOpenGLFramebufferObject *fbo);
 
@@ -132,6 +135,8 @@ private:
     QVariantList m_pendingExternalSubtitles;
     bool m_renderContextReady;
     mpv_render_context *m_renderContext;
+    std::atomic_bool m_frameUpdateScheduled;
+    std::atomic_bool m_frameUpdateDirty;
     QVariantList m_playlistItems;
     int m_playlistIndex;
 };

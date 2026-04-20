@@ -33,7 +33,7 @@ void *getProcAddressMpv(void *ctx, const char *name)
 void onMpvRenderUpdate(void *ctx)
 {
     auto *view = static_cast<MpvPlayerView *>(ctx);
-    emit view->frameUpdateRequested();
+    view->scheduleFrameUpdate();
 }
 
 class MpvRenderContext
@@ -165,7 +165,9 @@ MpvPlayerView::MpvPlayerView(QQuickItem *parent)
       m_session(new MpvPlayerSession(this)),
       m_playlistIndex(-1),
       m_renderContextReady(false),
-      m_renderContext(nullptr)
+      m_renderContext(nullptr),
+      m_frameUpdateScheduled(false),
+      m_frameUpdateDirty(false)
 {
     connect(this, &MpvPlayerView::frameUpdateRequested, this, &MpvPlayerView::requestFrameUpdate, Qt::QueuedConnection);
     connect(m_session, &MpvPlayerSession::playbackFinished, this, &MpvPlayerView::handlePlaybackFinished);
@@ -445,6 +447,14 @@ void MpvPlayerView::setProperty(const QString &name, const QVariant &value)
 
 void MpvPlayerView::requestFrameUpdate()
 {
+    QQuickWindow *targetWindow = window();
+    if (!targetWindow || !targetWindow->isExposed() || width() <= 0.0 || height() <= 0.0)
+    {
+        m_frameUpdateDirty.store(false, std::memory_order_release);
+        m_frameUpdateScheduled.store(false, std::memory_order_release);
+        return;
+    }
+
     update();
 }
 
@@ -550,6 +560,20 @@ mpv_handle *MpvPlayerView::mpvHandle() const
     return m_session->handle();
 }
 
+void MpvPlayerView::scheduleFrameUpdate()
+{
+    m_frameUpdateDirty.store(true, std::memory_order_release);
+
+    bool expected = false;
+    if (!m_frameUpdateScheduled.compare_exchange_strong(
+            expected, true, std::memory_order_acq_rel, std::memory_order_acquire))
+    {
+        return;
+    }
+
+    emit frameUpdateRequested();
+}
+
 void MpvPlayerView::ensureRenderContext()
 {
     MpvRenderContext::ensureCreated(&m_renderContext, mpvHandle(), this);
@@ -558,5 +582,23 @@ void MpvPlayerView::ensureRenderContext()
 
 void MpvPlayerView::renderFrame(QOpenGLFramebufferObject *fbo)
 {
+    const bool hadScheduledUpdate = m_frameUpdateScheduled.load(std::memory_order_acquire);
+    if (hadScheduledUpdate)
+    {
+        m_frameUpdateDirty.store(false, std::memory_order_release);
+    }
+
     MpvRenderContext::render(m_renderContext, window(), fbo);
+
+    if (!hadScheduledUpdate)
+    {
+        return;
+    }
+
+    m_frameUpdateScheduled.store(false, std::memory_order_release);
+
+    if (m_frameUpdateDirty.exchange(false, std::memory_order_acq_rel))
+    {
+        scheduleFrameUpdate();
+    }
 }

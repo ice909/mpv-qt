@@ -1,5 +1,6 @@
 #include "src/player/videoplayerview.h"
 
+#include <QMetaObject>
 #include <QQuickWindow>
 
 #include "src/app/playerwindow.h"
@@ -10,6 +11,7 @@ VideoPlayerView::VideoPlayerView(QQuickItem *parent)
       m_session(new MpvPlayerSession(this)),
       m_registeredWindow(nullptr),
       m_renderContextReady(false),
+      m_windowUpdateScheduled(false),
       m_playlistIndex(-1)
 {
     setFlag(QQuickItem::ItemHasContents, false);
@@ -167,10 +169,7 @@ void VideoPlayerView::loadMedia(const QString &path, const QVariantList &externa
     {
         m_pendingFile = path;
         m_pendingExternalSubtitles = externalSubtitles;
-        if (QQuickWindow *targetWindow = window())
-        {
-            targetWindow->update();
-        }
+        scheduleWindowUpdate();
         return;
     }
 
@@ -397,10 +396,28 @@ void VideoPlayerView::geometryChange(const QRectF &newGeometry, const QRectF &ol
 {
     QQuickItem::geometryChange(newGeometry, oldGeometry);
 
-    if (newGeometry == oldGeometry)
+    if (newGeometry.size() == oldGeometry.size())
     {
         return;
     }
+
+    scheduleWindowUpdate();
+}
+
+void VideoPlayerView::scheduleWindowUpdate()
+{
+    if (m_windowUpdateScheduled)
+    {
+        return;
+    }
+
+    m_windowUpdateScheduled = true;
+    QMetaObject::invokeMethod(this, &VideoPlayerView::performWindowUpdate, Qt::QueuedConnection);
+}
+
+void VideoPlayerView::performWindowUpdate()
+{
+    m_windowUpdateScheduled = false;
 
     if (QQuickWindow *targetWindow = window())
     {

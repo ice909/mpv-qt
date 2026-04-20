@@ -113,9 +113,11 @@ private slots:
     void handleWindowChanged(QQuickWindow *window);
     void loadPendingFile();
     void handlePlaybackFinished();
+    void performWindowUpdate();
 
 private:
     void geometryChange(const QRectF &newGeometry, const QRectF &oldGeometry) override;
+    void scheduleWindowUpdate();
     void loadMedia(const QString &path, const QVariantList &externalSubtitles);
     QVariantMap playlistItemAt(int index) const;
     QVariantList normalizedSubtitles(const QVariantList &subtitles) const;
@@ -129,6 +131,7 @@ private:
     QString m_pendingFile;
     QVariantList m_pendingExternalSubtitles;
     bool m_renderContextReady;
+    bool m_windowUpdateScheduled;
     QVariantList m_playlistItems;
     int m_playlistIndex;
 };

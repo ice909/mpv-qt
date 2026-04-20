@@ -354,7 +354,10 @@ void MpvPlayerSession::processMpvEvents()
             const auto *endFile = static_cast<mpv_event_end_file *>(event->data);
             const bool reachedPlaylistEnd = endFile && endFile->reason == MPV_END_FILE_REASON_EOF;
             m_reachedEof = true;
-            setTimePos(0.0);
+            if (reachedPlaylistEnd)
+            {
+                setTimePos(m_duration);
+            }
             setBufferDuration(0.0);
             setBufferEnd(0.0);
             setBuffering(false);

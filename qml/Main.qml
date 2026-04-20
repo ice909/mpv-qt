@@ -154,6 +154,7 @@ Item {
         anchors.fill: parent
         color: "#000000"
         z: -1
+        visible: !renderer.hasMedia
     }
 
     Item {

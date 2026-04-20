@@ -1,19 +1,18 @@
 #ifndef LZC_PLAYER_MPVPLAYERVIEW_H_
 #define LZC_PLAYER_MPVPLAYERVIEW_H_
 
-#include <QtQuick/QQuickFramebufferObject>
+#include <QtQuick/QQuickItem>
 #include <mpv/client.h>
-#include <mpv/render_gl.h>
-
-#include <atomic>
 
 #include <QString>
 #include <QStringList>
 #include <QVariant>
 
 class MpvPlayerSession;
+class PlayerWindow;
+class QQuickWindow;
 
-class MpvPlayerView : public QQuickFramebufferObject
+class MpvPlayerView : public QQuickItem
 {
     Q_OBJECT
     Q_PROPERTY(bool playing READ isPlaying NOTIFY playingChanged)
@@ -44,11 +43,8 @@ public:
     explicit MpvPlayerView(QQuickItem *parent = nullptr);
     ~MpvPlayerView() override;
 
-    Renderer *createRenderer() const override;
     mpv_handle *mpvHandle() const;
-    void scheduleFrameUpdate();
-    void ensureRenderContext();
-    void renderFrame(QOpenGLFramebufferObject *fbo);
+    void markRenderContextReady();
 
     bool isPlaying() const;
     double timePos() const;
@@ -93,7 +89,6 @@ public slots:
     void setProperty(const QString &name, const QVariant &value);
 
 signals:
-    void frameUpdateRequested();
     void playingChanged();
     void timePosChanged();
     void durationChanged();
@@ -118,25 +113,25 @@ signals:
     void playlistCountChanged();
 
 private slots:
-    void requestFrameUpdate();
-    void markRenderContextReady();
+    void handleWindowChanged(QQuickWindow *window);
     void loadPendingFile();
     void handlePlaybackFinished();
 
 private:
+    void geometryChange(const QRectF &newGeometry, const QRectF &oldGeometry) override;
     void loadMedia(const QString &path, const QVariantList &externalSubtitles);
     QVariantMap playlistItemAt(int index) const;
     QVariantList normalizedSubtitles(const QVariantList &subtitles) const;
     void setPlaylistIndexInternal(int index);
     void loadEpisodeAtIndex(int index);
+    void attachToWindow(PlayerWindow *window);
+    void detachFromWindow();
 
     MpvPlayerSession *m_session;
+    PlayerWindow *m_registeredWindow;
     QString m_pendingFile;
     QVariantList m_pendingExternalSubtitles;
     bool m_renderContextReady;
-    mpv_render_context *m_renderContext;
-    std::atomic_bool m_frameUpdateScheduled;
-    std::atomic_bool m_frameUpdateDirty;
     QVariantList m_playlistItems;
     int m_playlistIndex;
 };

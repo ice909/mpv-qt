@@ -1,175 +1,20 @@
 #include "src/player/mpvplayerview.h"
 
-#include <stdexcept>
-
-#include <QGuiApplication>
-#include <QMetaObject>
-#include <QOpenGLContext>
-#include <QQuickOpenGLUtils>
 #include <QQuickWindow>
-#include <QtGui/qguiapplication_platform.h>
-#include <QtOpenGL/QOpenGLFramebufferObject>
 
-#include <mpv/render_gl.h>
-
+#include "src/app/playerwindow.h"
 #include "src/player/mpvplayersession.h"
 
-namespace
-{
-
-void *getProcAddressMpv(void *ctx, const char *name)
-{
-    Q_UNUSED(ctx)
-
-    QOpenGLContext *glctx = QOpenGLContext::currentContext();
-    if (!glctx)
-    {
-        return nullptr;
-    }
-
-    return reinterpret_cast<void *>(glctx->getProcAddress(QByteArray(name)));
-}
-
-void onMpvRenderUpdate(void *ctx)
-{
-    auto *view = static_cast<MpvPlayerView *>(ctx);
-    view->scheduleFrameUpdate();
-}
-
-class MpvRenderContext
-{
-public:
-    static bool isReady(mpv_render_context *context)
-    {
-        return context != nullptr;
-    }
-
-    static void ensureCreated(mpv_render_context **context, mpv_handle *mpv, MpvPlayerView *view)
-    {
-        if (*context)
-        {
-            return;
-        }
-
-        mpv_opengl_init_params glInitParams = {getProcAddressMpv, nullptr};
-        mpv_render_param params[5] = {};
-        int paramIndex = 0;
-
-        params[paramIndex++] =
-            mpv_render_param{MPV_RENDER_PARAM_API_TYPE, const_cast<char *>(MPV_RENDER_API_TYPE_OPENGL)};
-        params[paramIndex++] =
-            mpv_render_param{MPV_RENDER_PARAM_OPENGL_INIT_PARAMS, &glInitParams};
-
-#if QT_CONFIG(wayland)
-        if (auto *waylandApp = qGuiApp->nativeInterface<QNativeInterface::QWaylandApplication>())
-        {
-            params[paramIndex++] =
-                mpv_render_param{MPV_RENDER_PARAM_WL_DISPLAY, waylandApp->display()};
-        }
-#endif
-
-#if QT_CONFIG(xcb)
-        if (auto *x11App = qGuiApp->nativeInterface<QNativeInterface::QX11Application>())
-        {
-            params[paramIndex++] =
-                mpv_render_param{MPV_RENDER_PARAM_X11_DISPLAY, x11App->display()};
-        }
-#endif
-
-        params[paramIndex] = mpv_render_param{MPV_RENDER_PARAM_INVALID, nullptr};
-
-        if (mpv_render_context_create(context, mpv, params) < 0)
-        {
-            throw std::runtime_error("failed to initialize mpv GL context");
-        }
-
-        mpv_render_context_set_update_callback(*context, onMpvRenderUpdate, view);
-    }
-
-    static void free(mpv_render_context **context)
-    {
-        if (!*context)
-        {
-            return;
-        }
-
-        mpv_render_context_set_update_callback(*context, nullptr, nullptr);
-        mpv_render_context_free(*context);
-        *context = nullptr;
-    }
-
-    static void render(mpv_render_context *context, QQuickWindow *window, QOpenGLFramebufferObject *fbo)
-    {
-        if (!context || !window || !fbo)
-        {
-            return;
-        }
-
-        mpv_render_context_update(context);
-
-        window->beginExternalCommands();
-        QQuickOpenGLUtils::resetOpenGLState();
-
-        mpv_opengl_fbo mpvFbo = {
-            static_cast<int>(fbo->handle()),
-            fbo->width(),
-            fbo->height(),
-            0,
-        };
-        int flipY = 0;
-        int blockForTargetTime = 0;
-
-        mpv_render_param params[] = {
-            {MPV_RENDER_PARAM_OPENGL_FBO, &mpvFbo},
-            {MPV_RENDER_PARAM_FLIP_Y, &flipY},
-            {MPV_RENDER_PARAM_BLOCK_FOR_TARGET_TIME, &blockForTargetTime},
-            {MPV_RENDER_PARAM_INVALID, nullptr},
-        };
-
-        mpv_render_context_render(context, params);
-        QQuickOpenGLUtils::resetOpenGLState();
-        window->endExternalCommands();
-    }
-};
-
-class MpvPlayerViewRenderer : public QQuickFramebufferObject::Renderer
-{
-public:
-    explicit MpvPlayerViewRenderer(MpvPlayerView *view)
-        : view_(view)
-    {
-    }
-
-    ~MpvPlayerViewRenderer() override = default;
-
-    QOpenGLFramebufferObject *createFramebufferObject(const QSize &size) override
-    {
-        Q_UNUSED(size)
-        view_->ensureRenderContext();
-        return QQuickFramebufferObject::Renderer::createFramebufferObject(size);
-    }
-
-    void render() override
-    {
-        view_->renderFrame(framebufferObject());
-    }
-
-private:
-    MpvPlayerView *view_;
-};
-
-} // namespace
-
 MpvPlayerView::MpvPlayerView(QQuickItem *parent)
-    : QQuickFramebufferObject(parent),
+    : QQuickItem(parent),
       m_session(new MpvPlayerSession(this)),
-      m_playlistIndex(-1),
+      m_registeredWindow(nullptr),
       m_renderContextReady(false),
-      m_renderContext(nullptr),
-      m_frameUpdateScheduled(false),
-      m_frameUpdateDirty(false)
+      m_playlistIndex(-1)
 {
-    connect(this, &MpvPlayerView::frameUpdateRequested, this, &MpvPlayerView::requestFrameUpdate, Qt::QueuedConnection);
+    setFlag(QQuickItem::ItemHasContents, false);
+
+    connect(this, &QQuickItem::windowChanged, this, &MpvPlayerView::handleWindowChanged);
     connect(m_session, &MpvPlayerSession::playbackFinished, this, &MpvPlayerView::handlePlaybackFinished);
     connect(m_session, &MpvPlayerSession::playingChanged, this, &MpvPlayerView::playingChanged);
     connect(m_session, &MpvPlayerSession::timePosChanged, this, &MpvPlayerView::timePosChanged);
@@ -194,14 +39,7 @@ MpvPlayerView::MpvPlayerView(QQuickItem *parent)
 
 MpvPlayerView::~MpvPlayerView()
 {
-    MpvRenderContext::free(&m_renderContext);
-}
-
-QQuickFramebufferObject::Renderer *MpvPlayerView::createRenderer() const
-{
-    window()->setPersistentGraphics(true);
-    window()->setPersistentSceneGraph(true);
-    return new MpvPlayerViewRenderer(const_cast<MpvPlayerView *>(this));
+    detachFromWindow();
 }
 
 bool MpvPlayerView::isPlaying() const
@@ -335,7 +173,10 @@ void MpvPlayerView::loadMedia(const QString &path, const QVariantList &externalS
     {
         m_pendingFile = path;
         m_pendingExternalSubtitles = externalSubtitles;
-        update();
+        if (QQuickWindow *targetWindow = window())
+        {
+            targetWindow->update();
+        }
         return;
     }
 
@@ -445,17 +286,15 @@ void MpvPlayerView::setProperty(const QString &name, const QVariant &value)
     m_session->setProperty(name, value);
 }
 
-void MpvPlayerView::requestFrameUpdate()
+void MpvPlayerView::handleWindowChanged(QQuickWindow *window)
 {
-    QQuickWindow *targetWindow = window();
-    if (!targetWindow || !targetWindow->isExposed() || width() <= 0.0 || height() <= 0.0)
+    if (window == m_registeredWindow)
     {
-        m_frameUpdateDirty.store(false, std::memory_order_release);
-        m_frameUpdateScheduled.store(false, std::memory_order_release);
         return;
     }
 
-    update();
+    detachFromWindow();
+    attachToWindow(qobject_cast<PlayerWindow *>(window));
 }
 
 void MpvPlayerView::markRenderContextReady()
@@ -560,45 +399,41 @@ mpv_handle *MpvPlayerView::mpvHandle() const
     return m_session->handle();
 }
 
-void MpvPlayerView::scheduleFrameUpdate()
+void MpvPlayerView::geometryChange(const QRectF &newGeometry, const QRectF &oldGeometry)
 {
-    m_frameUpdateDirty.store(true, std::memory_order_release);
+    QQuickItem::geometryChange(newGeometry, oldGeometry);
 
-    bool expected = false;
-    if (!m_frameUpdateScheduled.compare_exchange_strong(
-            expected, true, std::memory_order_acq_rel, std::memory_order_acquire))
+    if (newGeometry == oldGeometry)
     {
         return;
     }
 
-    emit frameUpdateRequested();
-}
-
-void MpvPlayerView::ensureRenderContext()
-{
-    MpvRenderContext::ensureCreated(&m_renderContext, mpvHandle(), this);
-    QMetaObject::invokeMethod(this, &MpvPlayerView::markRenderContextReady, Qt::QueuedConnection);
-}
-
-void MpvPlayerView::renderFrame(QOpenGLFramebufferObject *fbo)
-{
-    const bool hadScheduledUpdate = m_frameUpdateScheduled.load(std::memory_order_acquire);
-    if (hadScheduledUpdate)
+    if (QQuickWindow *targetWindow = window())
     {
-        m_frameUpdateDirty.store(false, std::memory_order_release);
+        targetWindow->update();
     }
+}
 
-    MpvRenderContext::render(m_renderContext, window(), fbo);
-
-    if (!hadScheduledUpdate)
+void MpvPlayerView::attachToWindow(PlayerWindow *window)
+{
+    if (!window)
     {
         return;
     }
 
-    m_frameUpdateScheduled.store(false, std::memory_order_release);
+    m_registeredWindow = window;
+    m_registeredWindow->setVideoView(this);
+}
 
-    if (m_frameUpdateDirty.exchange(false, std::memory_order_acq_rel))
+void MpvPlayerView::detachFromWindow()
+{
+    if (!m_registeredWindow)
     {
-        scheduleFrameUpdate();
+        return;
     }
+
+    PlayerWindow *window = m_registeredWindow;
+    m_registeredWindow = nullptr;
+    m_renderContextReady = false;
+    window->clearVideoView(this);
 }

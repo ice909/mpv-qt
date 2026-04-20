@@ -83,6 +83,8 @@ qt_add_executable(lzc-player
     src/app/playerwindow.h
     src/player/mpvplayerview.cpp
     src/player/mpvplayerview.h
+    src/player/mpvwindowrenderer.cpp
+    src/player/mpvwindowrenderer.h
     src/player/mpvplayersession.cpp
     src/player/mpvplayersession.h
     src/player/mpvtrackmapper.cpp

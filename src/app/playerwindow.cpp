@@ -9,11 +9,20 @@
 #include <QMimeData>
 #include <QUrl>
 
+#include "src/player/mpvwindowrenderer.h"
+
 PlayerWindow::PlayerWindow(QWindow *parent)
     : QQuickView(parent),
+      m_videoView(nullptr),
+      m_videoRenderer(new MpvWindowRenderer(this)),
       m_dropActive(false)
 {
+    setPersistentGraphics(true);
+    setPersistentSceneGraph(true);
+    setColor(Qt::black);
 }
+
+PlayerWindow::~PlayerWindow() = default;
 
 bool PlayerWindow::dropActive() const
 {
@@ -32,6 +41,30 @@ void PlayerWindow::openSystemFileDialog()
     }
 
     emit fileSelected(path);
+}
+
+void PlayerWindow::setVideoView(MpvPlayerView *view)
+{
+    if (m_videoView == view)
+    {
+        return;
+    }
+
+    m_videoView = view;
+    m_videoRenderer->setView(view);
+    update();
+}
+
+void PlayerWindow::clearVideoView(MpvPlayerView *view)
+{
+    if (m_videoView != view)
+    {
+        return;
+    }
+
+    m_videoView = nullptr;
+    m_videoRenderer->setView(nullptr);
+    update();
 }
 
 bool PlayerWindow::event(QEvent *event)

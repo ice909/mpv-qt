@@ -146,15 +146,13 @@ void MpvWindowRenderer::render()
 
 void MpvWindowRenderer::releaseResources()
 {
-    if (!m_renderContext)
+    mpv_render_context *renderContext = takeRenderContext();
+    if (!renderContext)
     {
         return;
     }
 
-    mpv_render_context_set_update_callback(m_renderContext, nullptr, nullptr);
-    mpv_render_context_free(m_renderContext);
-    m_renderContext = nullptr;
-    m_renderContextReady = false;
+    destroyRenderContext(renderContext);
 }
 
 void MpvWindowRenderer::requestWindowUpdate()
@@ -229,4 +227,30 @@ void MpvWindowRenderer::markRenderContextReady()
 
     m_renderContextReady = true;
     QMetaObject::invokeMethod(m_view, &MpvPlayerView::markRenderContextReady, Qt::QueuedConnection);
+}
+
+mpv_render_context *MpvWindowRenderer::takeRenderContext()
+{
+    mpv_render_context *renderContext = m_renderContext;
+    m_renderContext = nullptr;
+    m_renderContextReady = false;
+    m_frameUpdateDirty.store(false, std::memory_order_release);
+    m_frameUpdateScheduled.store(false, std::memory_order_release);
+
+    if (renderContext)
+    {
+        mpv_render_context_set_update_callback(renderContext, nullptr, nullptr);
+    }
+
+    return renderContext;
+}
+
+void MpvWindowRenderer::destroyRenderContext(mpv_render_context *renderContext)
+{
+    if (!renderContext)
+    {
+        return;
+    }
+
+    mpv_render_context_free(renderContext);
 }

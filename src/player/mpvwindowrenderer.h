@@ -31,6 +31,8 @@ private slots:
 private:
     void ensureRenderContext();
     void markRenderContextReady();
+    mpv_render_context *takeRenderContext();
+    static void destroyRenderContext(mpv_render_context *renderContext);
 
     PlayerWindow *m_window;
     QPointer<MpvPlayerView> m_view;

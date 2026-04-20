@@ -108,6 +108,8 @@ MpvPlayerSession::MpvPlayerSession(QObject *parent)
     mpv_set_option_string(mpv, "gpu-context", "auto");
     mpv_set_option_string(mpv, "vo", "libmpv");
     mpv_set_option_string(mpv, "keep-open", "yes");
+    mpv_set_option_string(mpv, "video-sync", "display-resample");
+    mpv_set_option_string(mpv, "interpolation", "yes");
     applyNetworkOptions(mpv);
     applyIpcServerOption(mpv);
 

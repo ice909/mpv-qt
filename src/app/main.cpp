@@ -2,12 +2,15 @@
 #include "src/player/mpvplayerview.h"
 
 #include <clocale>
+#include <cstdio>
+#include <cstdlib>
 #include <initializer_list>
 
 #include <QApplication>
 #include <QColor>
 #include <QCommandLineParser>
 #include <QCoreApplication>
+#include <QDateTime>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -17,11 +20,21 @@
 #include <QJsonParseError>
 #include <QJsonValue>
 #include <QLoggingCategory>
+#include <QMessageBox>
+#include <QMutex>
+#include <QMutexLocker>
 #include <QQmlContext>
+#include <QQmlError>
 #include <QQuickView>
 #include <QQuickWindow>
+#include <QStandardPaths>
+#include <QTextStream>
 
 namespace {
+
+QFile *g_logFile = nullptr;
+QString g_logFilePath;
+QMutex g_logMutex;
 
 struct StartupOptions
 {
@@ -36,6 +49,110 @@ void setApplicationMetadata()
 {
     QCoreApplication::setApplicationName(QStringLiteral("lzc-player"));
     QCoreApplication::setApplicationVersion(QString::fromLatin1(LZC_PLAYER_VERSION));
+}
+
+QString messageTypeName(QtMsgType type)
+{
+    switch (type)
+    {
+    case QtDebugMsg:
+        return QStringLiteral("DEBUG");
+    case QtInfoMsg:
+        return QStringLiteral("INFO");
+    case QtWarningMsg:
+        return QStringLiteral("WARN");
+    case QtCriticalMsg:
+        return QStringLiteral("ERROR");
+    case QtFatalMsg:
+        return QStringLiteral("FATAL");
+    }
+
+    return QStringLiteral("LOG");
+}
+
+void appendLogLine(const QString &line)
+{
+    QMutexLocker locker(&g_logMutex);
+
+    if (g_logFile && g_logFile->isOpen())
+    {
+        QTextStream stream(g_logFile);
+        stream << line << Qt::endl;
+        g_logFile->flush();
+    }
+
+    std::fprintf(stderr, "%s\n", line.toLocal8Bit().constData());
+    std::fflush(stderr);
+}
+
+void messageHandler(QtMsgType type, const QMessageLogContext &context, const QString &message)
+{
+    QString line = QStringLiteral("%1 [%2] %3")
+                       .arg(QDateTime::currentDateTime().toString(Qt::ISODateWithMs),
+                            messageTypeName(type),
+                            message);
+
+    if (context.file && *context.file)
+    {
+        line += QStringLiteral(" (%1:%2)").arg(QString::fromLocal8Bit(context.file)).arg(context.line);
+    }
+
+    appendLogLine(line);
+
+    if (type == QtFatalMsg)
+    {
+        std::abort();
+    }
+}
+
+void installFileLogging()
+{
+    QString logDir = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
+    if (logDir.isEmpty())
+    {
+        logDir = QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("logs"));
+    }
+
+    QDir().mkpath(logDir);
+    g_logFilePath = QDir(logDir).filePath(QStringLiteral("lzc-player.log"));
+
+    if (!g_logFile)
+    {
+        g_logFile = new QFile(g_logFilePath);
+        g_logFile->open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text);
+    }
+
+    qInstallMessageHandler(messageHandler);
+    qInfo().noquote() << "Logging to" << QDir::toNativeSeparators(g_logFilePath);
+}
+
+QString startupFailureMessage(const QString &details)
+{
+    QString message = details.trimmed();
+    if (message.isEmpty())
+    {
+        message = QStringLiteral("程序启动失败。");
+    }
+
+    if (!g_logFilePath.isEmpty())
+    {
+        message += QStringLiteral("\n\n日志文件:\n%1").arg(QDir::toNativeSeparators(g_logFilePath));
+    }
+
+    return message;
+}
+
+void showStartupFailureDialog(const QString &details)
+{
+    QMessageBox::critical(nullptr, QStringLiteral("lzc-player"), startupFailureMessage(details));
+}
+
+void logQmlErrors(const QList<QQmlError> &errors)
+{
+    for (const QQmlError &error : errors)
+    {
+        qCritical().noquote() << error.toString();
+    }
 }
 
 void configureCommandLineParser(QCommandLineParser &parser)
@@ -336,55 +453,98 @@ bool loadStartupOptionsFromParser(const QCommandLineParser &parser, StartupOptio
 
 int main(int argc, char **argv)
 {
-    if (hasCommandLineOption(argc, argv, {"--help", "--help-all", "-h", "-?"})) {
-        QCoreApplication app(argc, argv);
-        setApplicationMetadata();
-
-        QCommandLineParser parser;
-        configureCommandLineParser(parser);
-        parser.process(app);
-    }
-
-    if (hasCommandLineOption(argc, argv, {"--version", "-v"})) {
-        QCoreApplication app(argc, argv);
-        setApplicationMetadata();
-
-        QCommandLineParser parser;
-        configureCommandLineParser(parser);
-        parser.process(app);
-    }
-
-    QQuickWindow::setGraphicsApi(QSGRendererInterface::OpenGL);
-    QApplication app(argc, argv);
-    setApplicationMetadata();
-
-    QCommandLineParser parser;
-    configureCommandLineParser(parser);
-    parser.process(app);
-
-    StartupOptions startupOptions;
-    if (!loadStartupOptionsFromParser(parser, &startupOptions))
+    try
     {
+        if (hasCommandLineOption(argc, argv, {"--help", "--help-all", "-h", "-?"})) {
+            QCoreApplication app(argc, argv);
+            setApplicationMetadata();
+
+            QCommandLineParser parser;
+            configureCommandLineParser(parser);
+            parser.process(app);
+        }
+
+        if (hasCommandLineOption(argc, argv, {"--version", "-v"})) {
+            QCoreApplication app(argc, argv);
+            setApplicationMetadata();
+
+            QCommandLineParser parser;
+            configureCommandLineParser(parser);
+            parser.process(app);
+        }
+
+        QQuickWindow::setGraphicsApi(QSGRendererInterface::OpenGL);
+        QApplication app(argc, argv);
+        setApplicationMetadata();
+        installFileLogging();
+
+        QCommandLineParser parser;
+        configureCommandLineParser(parser);
+        parser.process(app);
+
+        StartupOptions startupOptions;
+        if (!loadStartupOptionsFromParser(parser, &startupOptions))
+        {
+            showStartupFailureDialog(QStringLiteral("配置解析失败。"));
+            return 1;
+        }
+
+        const QString startupFile = startupOptions.playlist.isEmpty() ? startupOptions.file : QString();
+        app.setProperty("lzcPlayerCookie", startupOptions.cookie);
+        app.setProperty("lzcPlayerInputIpcServer", startupOptions.inputIpcServer);
+
+        std::setlocale(LC_NUMERIC, "C");
+
+        qmlRegisterType<MpvPlayerView>("mpvtest", 1, 0, "MpvPlayerView");
+
+        PlayerWindow view;
+        QObject::connect(&view, &QQuickView::statusChanged, &view, [&view](QQuickView::Status status) {
+            if (status == QQuickView::Error)
+            {
+                logQmlErrors(view.errors());
+            }
+        });
+        QObject::connect(&view, &QQuickWindow::sceneGraphError, &view,
+                         [](QQuickWindow::SceneGraphError, const QString &message) {
+                             qCritical().noquote() << "Scene graph error:" << message;
+                         });
+
+        view.setColor(QColor(QStringLiteral("#000000")));
+        view.setResizeMode(QQuickView::SizeRootObjectToView);
+        view.rootContext()->setContextProperty("playerWindow", &view);
+        view.rootContext()->setContextProperty("initialFile", startupFile);
+        view.rootContext()->setContextProperty("initialPlaylist", startupOptions.playlist);
+        view.rootContext()->setContextProperty("initialStartPosition", startupOptions.start);
+        view.setSource(QUrl(QStringLiteral("qrc:/lzc-player/qml/Main.qml")));
+
+        if (view.status() == QQuickView::Error)
+        {
+            logQmlErrors(view.errors());
+            showStartupFailureDialog(QStringLiteral("QML 界面加载失败。"));
+            return 1;
+        }
+
+        const QSize initialSize = view.initialSize().isValid() ? view.initialSize() : QSize(1280, 720);
+        view.resize(initialSize);
+        qInfo().noquote() << "Main window initial size:" << initialSize;
+        view.show();
+
+        return app.exec();
+    }
+    catch (const std::exception &error)
+    {
+        const QString message = QStringLiteral("Unhandled exception: %1").arg(QString::fromLocal8Bit(error.what()));
+        appendLogLine(QStringLiteral("%1 [FATAL] %2")
+                          .arg(QDateTime::currentDateTime().toString(Qt::ISODateWithMs), message));
+        showStartupFailureDialog(message);
         return 1;
     }
-
-    const QString startupFile = startupOptions.playlist.isEmpty() ? startupOptions.file : QString();
-    app.setProperty("lzcPlayerCookie", startupOptions.cookie);
-    app.setProperty("lzcPlayerInputIpcServer", startupOptions.inputIpcServer);
-
-    std::setlocale(LC_NUMERIC, "C");
-
-    qmlRegisterType<MpvPlayerView>("mpvtest", 1, 0, "MpvPlayerView");
-
-    PlayerWindow view;
-    view.setColor(QColor(QStringLiteral("#000000")));
-    view.setResizeMode(QQuickView::SizeRootObjectToView);
-    view.rootContext()->setContextProperty("playerWindow", &view);
-    view.rootContext()->setContextProperty("initialFile", startupFile);
-    view.rootContext()->setContextProperty("initialPlaylist", startupOptions.playlist);
-    view.rootContext()->setContextProperty("initialStartPosition", startupOptions.start);
-    view.setSource(QUrl("qrc:/lzc-player/qml/Main.qml"));
-    view.show();
-
-    return app.exec();
+    catch (...)
+    {
+        const QString message = QStringLiteral("Unhandled non-standard exception.");
+        appendLogLine(QStringLiteral("%1 [FATAL] %2")
+                          .arg(QDateTime::currentDateTime().toString(Qt::ISODateWithMs), message));
+        showStartupFailureDialog(message);
+        return 1;
+    }
 }

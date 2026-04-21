@@ -12,17 +12,21 @@ qt_standard_project_setup(REQUIRES 6.8)
 set(MPV_ROOT "" CACHE PATH "Root directory of a prebuilt libmpv package")
 set(MPV_INCLUDE_DIR "" CACHE PATH "Directory containing mpv/client.h")
 set(MPV_LIBRARY "" CACHE FILEPATH "Path to the libmpv import/static library")
+set(MPV_RUNTIME_LIBRARY "" CACHE FILEPATH "Path to the libmpv runtime shared library")
 set(MPV_RUNTIME_DLL "" CACHE FILEPATH "Path to the libmpv runtime DLL")
+set(MPV_BUNDLE_SEARCH_PATHS "" CACHE STRING "Semicolon-separated directories used to locate libmpv runtime dependencies for bundling")
 
 set(mpv_target "")
 set(mpv_runtime_dll "")
+set(mpv_runtime_library "")
+set(mpv_bundle_search_paths "")
 
-if (WIN32)
-    if (MPV_ROOT)
-        if (NOT MPV_INCLUDE_DIR)
-            set(MPV_INCLUDE_DIR "${MPV_ROOT}/include")
-        endif()
+if (MPV_ROOT)
+    if (NOT MPV_INCLUDE_DIR)
+        set(MPV_INCLUDE_DIR "${MPV_ROOT}/include")
+    endif()
 
+    if (WIN32)
         if (NOT MPV_LIBRARY)
             find_library(MPV_LIBRARY
                 NAMES mpv libmpv mpv-2 libmpv.dll.a libmpv-2.dll.a mpv.dll.a libmpv.dll
@@ -45,9 +49,51 @@ if (WIN32)
                 NO_DEFAULT_PATH
             )
         endif()
-    endif()
+    else()
+        if (NOT MPV_LIBRARY)
+            find_library(MPV_LIBRARY
+                NAMES mpv libmpv
+                PATHS
+                    "${MPV_ROOT}"
+                    "${MPV_ROOT}/lib"
+                    "${MPV_ROOT}/lib64"
+                    "${MPV_ROOT}/Frameworks"
+                NO_DEFAULT_PATH
+            )
+        endif()
 
-    if (MPV_INCLUDE_DIR AND MPV_LIBRARY)
+        if (NOT MPV_RUNTIME_LIBRARY)
+            find_file(MPV_RUNTIME_LIBRARY
+                NAMES libmpv.dylib libmpv.2.dylib libmpv.so libmpv.so.2
+                PATHS
+                    "${MPV_ROOT}"
+                    "${MPV_ROOT}/lib"
+                    "${MPV_ROOT}/lib64"
+                    "${MPV_ROOT}/Frameworks"
+                NO_DEFAULT_PATH
+            )
+        endif()
+    endif()
+endif()
+
+if (WIN32 AND MPV_RUNTIME_DLL AND NOT MPV_RUNTIME_LIBRARY)
+    set(MPV_RUNTIME_LIBRARY "${MPV_RUNTIME_DLL}")
+endif()
+
+if (MPV_ROOT AND NOT MPV_BUNDLE_SEARCH_PATHS)
+    list(APPEND mpv_bundle_search_paths
+        "${MPV_ROOT}"
+        "${MPV_ROOT}/bin"
+        "${MPV_ROOT}/lib"
+        "${MPV_ROOT}/lib64"
+        "${MPV_ROOT}/Frameworks"
+    )
+elseif (MPV_BUNDLE_SEARCH_PATHS)
+    set(mpv_bundle_search_paths "${MPV_BUNDLE_SEARCH_PATHS}")
+endif()
+
+if (MPV_INCLUDE_DIR)
+    if (WIN32 AND MPV_LIBRARY)
         add_library(mpv::mpv SHARED IMPORTED)
         set_target_properties(mpv::mpv PROPERTIES
             IMPORTED_IMPLIB "${MPV_LIBRARY}"
@@ -62,6 +108,24 @@ if (WIN32)
 
         set(mpv_target mpv::mpv)
         set(mpv_runtime_dll "${MPV_RUNTIME_DLL}")
+        set(mpv_runtime_library "${MPV_RUNTIME_LIBRARY}")
+    elseif ((APPLE OR UNIX) AND (MPV_LIBRARY OR MPV_RUNTIME_LIBRARY))
+        if (NOT MPV_LIBRARY)
+            set(MPV_LIBRARY "${MPV_RUNTIME_LIBRARY}")
+        endif()
+
+        if (NOT MPV_RUNTIME_LIBRARY)
+            set(MPV_RUNTIME_LIBRARY "${MPV_LIBRARY}")
+        endif()
+
+        add_library(mpv::mpv SHARED IMPORTED)
+        set_target_properties(mpv::mpv PROPERTIES
+            IMPORTED_LOCATION "${MPV_RUNTIME_LIBRARY}"
+            INTERFACE_INCLUDE_DIRECTORIES "${MPV_INCLUDE_DIR}"
+        )
+
+        set(mpv_target mpv::mpv)
+        set(mpv_runtime_library "${MPV_RUNTIME_LIBRARY}")
     endif()
 endif()
 
@@ -144,11 +208,33 @@ set_target_properties(lzc-player PROPERTIES
     WIN32_EXECUTABLE TRUE
 )
 
+if (APPLE)
+    set_target_properties(lzc-player PROPERTIES
+        BUILD_RPATH "@executable_path/../Frameworks"
+        INSTALL_RPATH "@executable_path/../Frameworks"
+    )
+endif()
+
 if (WIN32 AND mpv_runtime_dll)
     add_custom_command(TARGET lzc-player POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "${mpv_runtime_dll}"
             "$<TARGET_FILE_DIR:lzc-player>"
+        VERBATIM
+    )
+endif()
+
+if (APPLE AND mpv_runtime_library)
+    list(REMOVE_DUPLICATES mpv_bundle_search_paths)
+    list(FILTER mpv_bundle_search_paths EXCLUDE REGEX "^$")
+    list(JOIN mpv_bundle_search_paths "|" mpv_bundle_search_paths_arg)
+
+    add_custom_command(TARGET lzc-player POST_BUILD
+        COMMAND ${CMAKE_COMMAND}
+            -DAPP_BUNDLE=$<TARGET_BUNDLE_DIR:lzc-player>
+            -DSEARCH_DIRS=${mpv_bundle_search_paths_arg}
+            -DEXTRA_LIBS=${mpv_runtime_library}
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/fixup_macos_bundle.cmake"
         VERBATIM
     )
 endif()
@@ -171,5 +257,15 @@ install(FILES assets/linux/lzc-player.svg
 if (WIN32 AND mpv_runtime_dll)
     install(FILES "${mpv_runtime_dll}"
         DESTINATION ${CMAKE_INSTALL_BINDIR}
+    )
+endif()
+
+if (APPLE AND mpv_runtime_library)
+    list(JOIN mpv_bundle_search_paths "|" mpv_bundle_search_paths_arg)
+    install(CODE
+        "set(APP_BUNDLE \"\${CMAKE_INSTALL_PREFIX}/lzc-player.app\")\n\
+set(SEARCH_DIRS \"${mpv_bundle_search_paths_arg}\")\n\
+set(EXTRA_LIBS \"${mpv_runtime_library}\")\n\
+include(\"${CMAKE_CURRENT_SOURCE_DIR}/cmake/fixup_macos_bundle.cmake\")"
     )
 endif()

@@ -50,7 +50,24 @@
 - `main.cpp` 中调用 `QQuickWindow::setGraphicsApi(QSGRendererInterface::OpenGL)`
 - `MpvWindowRenderer` 基于 `mpv/render_gl.h` 完成渲染上下文接入
 
-Windows 下支持通过 `MPV_ROOT`、`MPV_INCLUDE_DIR`、`MPV_LIBRARY`、`MPV_RUNTIME_DLL` 指定预编译 `libmpv`，其他平台默认走 `pkg-config` 查找 `mpv`。
+Windows 下支持通过 `MPV_ROOT`、`MPV_INCLUDE_DIR`、`MPV_LIBRARY`、`MPV_RUNTIME_DLL` 指定预编译 `libmpv`。
+
+macOS 下也支持通过 `MPV_ROOT` 接入手动下载的 `libmpv` 包，推荐目录结构如下：
+
+- `third_party/mpv/macos/include/mpv/*.h`
+- `third_party/mpv/macos/lib/libmpv.dylib`
+- `third_party/mpv/macos/lib/*.dylib`
+
+也就是把 `libmpv.dylib` 以及它依赖的非系统 `.dylib` 放在同一个 `lib` 目录，头文件放在 `include/mpv`。配置时可传：
+
+- `-DMPV_ROOT=/absolute/path/to/third_party/mpv/macos`
+- 如需手工覆盖，也可传 `-DMPV_INCLUDE_DIR=...`
+- 如需手工覆盖，也可传 `-DMPV_LIBRARY=...`
+- 如需手工覆盖，也可传 `-DMPV_RUNTIME_LIBRARY=...`
+
+在这种模式下，构建后的 `.app` 会自动把 `libmpv.dylib` 及其可解析到的运行时依赖修正并复制到 `lzc-player.app/Contents/Frameworks`，同时为可执行文件写入 `@executable_path/../Frameworks` 的 `rpath`。
+
+如果不传 `MPV_ROOT`，非 Windows 平台仍默认走 `pkg-config` 查找 `mpv`。
 
 ## 4. 模块职责
 

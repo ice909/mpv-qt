@@ -7,8 +7,10 @@ MPV_ROOT="${MPV_ROOT:-${ROOT_DIR}/third_party/mpv}"
 BUILD_DIR="${BUILD_DIR:-${ROOT_DIR}/build/msys2-mingw64}"
 DIST_ROOT="${DIST_ROOT:-${ROOT_DIR}/dist/windows}"
 APP_NAME="${APP_NAME:-lzc-player}"
+VERSION="${VERSION:-0.1}"
+ARCH="${ARCH:-x86_64}"
 PACKAGE_DIR="${PACKAGE_DIR:-${DIST_ROOT}/${APP_NAME}}"
-ZIP_PATH="${ZIP_PATH:-${DIST_ROOT}/${APP_NAME}-windows-x86_64.zip}"
+ZIP_PATH="${ZIP_PATH:-${DIST_ROOT}/${APP_NAME}-${VERSION}-windows-${ARCH}.zip}"
 RUN_BUILD="${RUN_BUILD:-1}"
 
 readonly -a MPV_RUNTIME_DLL_NAMES=(

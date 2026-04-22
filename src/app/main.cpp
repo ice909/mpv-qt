@@ -53,12 +53,10 @@ void setApplicationMetadata()
 
 void configureQtQuickControlsStyle()
 {
-#ifdef Q_OS_WIN
     if (!qEnvironmentVariableIsSet("QT_QUICK_CONTROLS_STYLE"))
     {
         qputenv("QT_QUICK_CONTROLS_STYLE", QByteArrayLiteral("Basic"));
     }
-#endif
 }
 
 QString messageTypeName(QtMsgType type)

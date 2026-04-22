@@ -11,6 +11,7 @@ MPV_RUNTIME_LIBRARY="${MPV_RUNTIME_LIBRARY:-${MPV_LIBRARY}}"
 CMAKE_BUILD_TYPE="${CMAKE_BUILD_TYPE:-Release}"
 CMAKE_GENERATOR="${CMAKE_GENERATOR:-Ninja}"
 RUN_MACDEPLOYQT="${RUN_MACDEPLOYQT:-1}"
+COPY_EXTRA_QT_RUNTIME="${COPY_EXTRA_QT_RUNTIME:-1}"
 FIX_QT_PLUGIN_RPATHS="${FIX_QT_PLUGIN_RPATHS:-1}"
 CLEAN_BUILD_DIR="${CLEAN_BUILD_DIR:-0}"
 CMAKE_BIN="${CMAKE_BIN:-$(command -v cmake || true)}"
@@ -55,6 +56,13 @@ find_macdeployqt() {
         "$(command -v macdeployqt || true)"
 }
 
+find_qt_plugin_root() {
+    find_first_existing \
+        "${QT_ROOT}/plugins" \
+        "${QT_ROOT}/share/qt6/plugins" \
+        "${QT_ROOT}/lib/qt6/plugins"
+}
+
 join_by_semicolon() {
     local first=1
     local item
@@ -92,6 +100,27 @@ fix_plugin_rpaths() {
     done < <(find "${plugin_root}" -name '*.dylib' -print0)
 }
 
+copy_framework_if_missing() {
+    local framework_name="$1"
+    local source="${QT_ROOT}/lib/${framework_name}"
+    local target="${APP_BUNDLE}/Contents/Frameworks/${framework_name}"
+
+    if [[ -e "${source}" && ! -e "${target}" ]]; then
+        cp -R "${source}" "${target}"
+    fi
+}
+
+copy_plugin_if_missing() {
+    local relative_path="$1"
+    local source="${QT_PLUGIN_ROOT}/${relative_path}"
+    local target="${APP_BUNDLE}/Contents/PlugIns/${relative_path}"
+
+    if [[ -e "${source}" && ! -e "${target}" ]]; then
+        mkdir -p "$(dirname "${target}")"
+        cp -f "${source}" "${target}"
+    fi
+}
+
 if [[ "$(uname -s)" != "Darwin" ]]; then
     fail "scripts/build-macos.sh must be run on macOS"
 fi
@@ -122,6 +151,7 @@ if ! libmpv_supports_gl "${MPV_LIBRARY}"; then
 fi
 
 MACDEPLOYQT_BIN="$(find_macdeployqt || true)"
+QT_PLUGIN_ROOT="$(find_qt_plugin_root || true)"
 if [[ "${RUN_MACDEPLOYQT}" != "0" && -z "${MACDEPLOYQT_BIN}" ]]; then
     fail "macdeployqt not found under QT_ROOT or PATH"
 fi
@@ -157,6 +187,19 @@ require_dir "${APP_BUNDLE}" "built app bundle"
 
 if [[ "${RUN_MACDEPLOYQT}" != "0" ]]; then
     "${MACDEPLOYQT_BIN}" "${APP_BUNDLE}" -qmldir="${ROOT_DIR}/qml"
+fi
+
+if [[ "${COPY_EXTRA_QT_RUNTIME}" != "0" ]]; then
+    copy_framework_if_missing "QtQuickControls2.framework"
+    copy_framework_if_missing "QtQuickControls2Impl.framework"
+    copy_framework_if_missing "QtQuickTemplates2.framework"
+    copy_framework_if_missing "QtSvg.framework"
+    copy_framework_if_missing "QtSvgWidgets.framework"
+
+    if [[ -n "${QT_PLUGIN_ROOT}" ]]; then
+        copy_plugin_if_missing "imageformats/libqsvg.dylib"
+        copy_plugin_if_missing "iconengines/libqsvgicon.dylib"
+    fi
 fi
 
 if [[ "${FIX_QT_PLUGIN_RPATHS}" != "0" ]]; then

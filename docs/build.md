@@ -195,6 +195,9 @@ bash scripts/build-macos.sh
 - 显式传入 `MPV_INCLUDE_DIR`、`MPV_LIBRARY`、`MPV_RUNTIME_LIBRARY`
 - 构建 `build/macos/lzc-player.app`
 - 调用 `macdeployqt -qmldir=qml`
+- 补齐 `QtQuickControls2.framework`、`QtQuickControls2Impl.framework`、`QtQuickTemplates2.framework`
+- 补齐 `QtSvg.framework`、`QtSvgWidgets.framework`
+- 补齐 `PlugIns/imageformats/libqsvg.dylib`、`PlugIns/iconengines/libqsvgicon.dylib`
 - 批量修正 `Contents/PlugIns/*.dylib` 的 `rpath`
 
 可选环境变量：
@@ -204,6 +207,7 @@ bash scripts/build-macos.sh
 - `BUILD_DIR=/absolute/path/to/build/macos`
 - `CLEAN_BUILD_DIR=1`
 - `RUN_MACDEPLOYQT=0`
+- `COPY_EXTRA_QT_RUNTIME=0`
 - `FIX_QT_PLUGIN_RPATHS=0`
 
 如果脚本检测到 `libmpv.dylib` 带有 `-Dgl=disabled`，会直接失败，因为当前项目使用的是 `mpv/render_gl.h` 路线，与这种构建不兼容。

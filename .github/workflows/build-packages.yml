@@ -1,0 +1,446 @@
+name: Build packages
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Package version. Defaults to the CMake project version."
+        required: false
+        type: string
+      macos_mpv_libmpv_url:
+        description: "URL for the macOS x86_64 libmpv.dylib file or archive."
+        required: false
+        type: string
+      macos_mpv_source_url:
+        description: "URL for the matching mpv source archive used to extract include/mpv headers."
+        required: false
+        type: string
+  push:
+    tags:
+      - "v*"
+      - "[0-9]*"
+
+permissions:
+  contents: write
+
+env:
+  APP_NAME: lzc-player
+  QT_VERSION: 6.8.2
+  LINUXDEPLOYQT_URL: https://github.com/probonopd/linuxdeployqt/releases/download/continuous/linuxdeployqt-continuous-x86_64.AppImage
+  APPIMAGETOOL_URL: https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+
+jobs:
+  prepare:
+    name: Prepare package metadata
+    runs-on: ubuntu-22.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: version
+        shell: bash
+        env:
+          INPUT_VERSION: ${{ inputs.version || '' }}
+        run: |
+          set -Eeuo pipefail
+
+          if [[ -n "${INPUT_VERSION}" ]]; then
+            version="${INPUT_VERSION}"
+          elif [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            version="${GITHUB_REF_NAME#v}"
+          else
+            version="$(sed -nE 's/^[[:space:]]*project\([^)]*VERSION[[:space:]]+([^[:space:])]+).*/\1/p' CMakeLists.txt | head -n 1)"
+          fi
+
+          if [[ -z "${version}" ]]; then
+            echo "Unable to resolve package version." >&2
+            exit 1
+          fi
+
+          if [[ ! "${version}" =~ ^[0-9A-Za-z][0-9A-Za-z._+-]*$ ]]; then
+            echo "Invalid package version: ${version}" >&2
+            echo "Use only letters, numbers, dot, underscore, plus, and hyphen." >&2
+            exit 1
+          fi
+
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+          echo "Package version: ${version}"
+
+  windows-x64:
+    name: Windows x86_64 ZIP
+    runs-on: windows-latest
+    needs: prepare
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-7zip
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-ninja
+            mingw-w64-x86_64-pkgconf
+            mingw-w64-x86_64-qt6-base
+            mingw-w64-x86_64-qt6-declarative
+            mingw-w64-x86_64-qt6-svg
+            mingw-w64-x86_64-toolchain
+
+      - name: Build package
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -Eeuo pipefail
+          export ARCH="x86_64"
+          export ZIP_PATH="${PWD}/dist/windows/${APP_NAME}-${VERSION}-windows-x86_64.zip"
+          bash scripts/package-windows.sh
+          test -f "${ZIP_PATH}"
+
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: lzc-player-${{ needs.prepare.outputs.version }}-windows-x86_64
+          path: dist/windows/lzc-player-${{ needs.prepare.outputs.version }}-windows-x86_64.zip
+          if-no-files-found: error
+
+  linux-x64:
+    name: Linux x86_64 AppImage
+    runs-on: ubuntu-22.04
+    needs: prepare
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            ca-certificates \
+            cmake \
+            curl \
+            file \
+            fuse \
+            g++ \
+            libfontconfig1 \
+            libfuse2 \
+            libgl1 \
+            libgl1-mesa-dev \
+            libmpv-dev \
+            libpulse0 \
+            libssl3 \
+            libvulkan1 \
+            libxcb-cursor0 \
+            libxcb-icccm4 \
+            libxcb-image0 \
+            libxcb-keysyms1 \
+            libxcb-render-util0 \
+            libxcb-shape0 \
+            libxcb-xinerama0 \
+            libxcb-xkb1 \
+            libxkbcommon-x11-0 \
+            ninja-build \
+            patchelf \
+            pkg-config \
+            python3 \
+            python3-pip \
+            zsync
+
+      - name: Install Qt
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m pip install --user --no-cache-dir aqtinstall
+          python3 -m aqt install-qt linux desktop "${QT_VERSION}" linux_gcc_64 \
+            -O "${RUNNER_TEMP}/Qt" \
+            -m qtshadertools qtsvg
+          echo "QT_ROOT=${RUNNER_TEMP}/Qt/${QT_VERSION}/gcc_64" >> "${GITHUB_ENV}"
+
+      - name: Install AppImage tools
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p "${RUNNER_TEMP}/appimage-tools"
+          curl -fsSL "${LINUXDEPLOYQT_URL}" -o "${RUNNER_TEMP}/appimage-tools/linuxdeployqt"
+          curl -fsSL "${APPIMAGETOOL_URL}" -o "${RUNNER_TEMP}/appimage-tools/appimagetool"
+          chmod +x "${RUNNER_TEMP}/appimage-tools/linuxdeployqt" "${RUNNER_TEMP}/appimage-tools/appimagetool"
+          echo "LINUXDEPLOYQT_BIN=${RUNNER_TEMP}/appimage-tools/linuxdeployqt" >> "${GITHUB_ENV}"
+          echo "APPIMAGETOOL_BIN=${RUNNER_TEMP}/appimage-tools/appimagetool" >> "${GITHUB_ENV}"
+          echo "APPIMAGE_EXTRACT_AND_RUN=1" >> "${GITHUB_ENV}"
+
+      - name: Build package
+        shell: bash
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -Eeuo pipefail
+          export ARCH="x86_64"
+          bash scripts/package-linux.sh
+
+          appimage="$(find dist/linux -maxdepth 1 -type f -name '*.AppImage' | head -n 1)"
+          if [[ -z "${appimage}" ]]; then
+            echo "AppImage was not created." >&2
+            exit 1
+          fi
+
+          target="dist/linux/${APP_NAME}-${VERSION}-linux-x86_64.AppImage"
+          mv -f "${appimage}" "${target}"
+          file "${target}"
+          file "${target}" | grep -Eq 'x86-64|x86_64|ELF 64-bit'
+
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: lzc-player-${{ needs.prepare.outputs.version }}-linux-x86_64
+          path: dist/linux/lzc-player-${{ needs.prepare.outputs.version }}-linux-x86_64.AppImage
+          if-no-files-found: error
+
+  macos-x64:
+    name: macOS x86_64 app bundle
+    runs-on: macos-13
+    needs: prepare
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build tools
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          brew install cmake ninja p7zip
+
+      - name: Install Qt
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m pip install --user --no-cache-dir aqtinstall
+          python3 -m aqt install-qt mac desktop "${QT_VERSION}" clang_64 \
+            -O "${RUNNER_TEMP}/Qt" \
+            -m qtshadertools qtsvg
+          echo "QT_ROOT=${RUNNER_TEMP}/Qt/${QT_VERSION}/macos" >> "${GITHUB_ENV}"
+
+      - name: Prepare libmpv
+        shell: bash
+        env:
+          INPUT_MPV_LIBMPV_URL: ${{ inputs.macos_mpv_libmpv_url || '' }}
+          INPUT_MPV_SOURCE_URL: ${{ inputs.macos_mpv_source_url || '' }}
+          VAR_MPV_LIBMPV_URL: ${{ vars.MACOS_MPV_LIBMPV_URL || '' }}
+          VAR_MPV_SOURCE_URL: ${{ vars.MACOS_MPV_SOURCE_URL || '' }}
+          SECRET_MPV_LIBMPV_URL: ${{ secrets.MACOS_MPV_LIBMPV_URL || '' }}
+          SECRET_MPV_SOURCE_URL: ${{ secrets.MACOS_MPV_SOURCE_URL || '' }}
+        run: |
+          set -Eeuo pipefail
+
+          mpv_libmpv_url="${INPUT_MPV_LIBMPV_URL:-${VAR_MPV_LIBMPV_URL:-${SECRET_MPV_LIBMPV_URL:-}}}"
+          mpv_source_url="${INPUT_MPV_SOURCE_URL:-${VAR_MPV_SOURCE_URL:-${SECRET_MPV_SOURCE_URL:-}}}"
+
+          if [[ -z "${mpv_libmpv_url}" ]]; then
+            echo "Missing macOS libmpv URL. Set workflow input macos_mpv_libmpv_url, repository variable MACOS_MPV_LIBMPV_URL, or secret MACOS_MPV_LIBMPV_URL." >&2
+            exit 1
+          fi
+
+          if [[ -z "${mpv_source_url}" ]]; then
+            echo "Missing macOS mpv source URL. Set workflow input macos_mpv_source_url, repository variable MACOS_MPV_SOURCE_URL, or secret MACOS_MPV_SOURCE_URL." >&2
+            exit 1
+          fi
+
+          work_dir="${RUNNER_TEMP}/macos-mpv"
+          downloads_dir="${work_dir}/downloads"
+          source_archive="${work_dir}/mpv-source"
+          source_extract="${work_dir}/source-extract"
+          mpv_root="${work_dir}/root"
+
+          rm -rf "${work_dir}"
+          mkdir -p "${downloads_dir}" "${source_extract}" "${mpv_root}/include/mpv" "${mpv_root}/lib"
+
+          curl -fL "${mpv_source_url}" -o "${source_archive}"
+
+          extract_archive() {
+            local archive="$1"
+            local target="$2"
+            if unzip -tq "${archive}" >/dev/null 2>&1; then
+              unzip -q "${archive}" -d "${target}"
+            elif tar -tf "${archive}" >/dev/null 2>&1; then
+              tar -xf "${archive}" -C "${target}"
+            elif command -v 7z >/dev/null 2>&1; then
+              7z x -y "-o${target}" "${archive}" >/dev/null
+            else
+              echo "Unsupported archive format: ${archive}" >&2
+              return 1
+            fi
+          }
+
+          download_url() {
+            local url="$1"
+            local prefix="$2"
+            local clean_url filename target
+            clean_url="${url%%\?*}"
+            filename="$(basename "${clean_url}")"
+            if [[ -z "${filename}" || "${filename}" == "/" || "${filename}" == "." ]]; then
+              filename="${prefix}"
+            fi
+            mkdir -p "${downloads_dir}/${prefix}"
+            target="${downloads_dir}/${prefix}/${filename}"
+            curl -fL "${url}" -o "${target}"
+            printf '%s\n' "${target}"
+          }
+
+          copy_direct_dylib() {
+            local input="$1"
+            local target_dir="$2"
+            local name
+            name="$(basename "${input}")"
+
+            if [[ "${name}" != *.dylib ]]; then
+              if file "${input}" | grep -q 'Mach-O.*dynamically linked shared library'; then
+                name="libmpv.dylib"
+              else
+                return 1
+              fi
+            fi
+
+            cp -f "${input}" "${target_dir}/${name}"
+          }
+
+          copy_dylibs_from_download() {
+            local input="$1"
+            local label="$2"
+            local extract_dir="${work_dir}/${label}-extract"
+            local found_count=0
+            mkdir -p "${extract_dir}"
+
+            if extract_archive "${input}" "${extract_dir}"; then
+              while IFS= read -r dylib; do
+                cp -f "${dylib}" "${mpv_root}/lib/"
+                found_count=$((found_count + 1))
+              done < <(find "${extract_dir}" -type f -name '*.dylib' | sort)
+            elif copy_direct_dylib "${input}" "${mpv_root}/lib"; then
+              found_count=1
+            else
+              echo "Unsupported macOS mpv download format: ${input}" >&2
+              return 1
+            fi
+
+            if [[ "${found_count}" -eq 0 ]]; then
+              echo "No dylib files found in ${input}." >&2
+              find "${extract_dir}" -maxdepth 4 -type f | sort >&2 || true
+              return 1
+            fi
+          }
+
+          libmpv_download="$(download_url "${mpv_libmpv_url}" "libmpv")"
+          copy_dylibs_from_download "${libmpv_download}" "libmpv"
+
+          extract_archive "${source_archive}" "${source_extract}"
+
+          libmpv_path="$(find "${mpv_root}/lib" -maxdepth 1 -type f -name 'libmpv*.dylib' | sort | head -n 1)"
+          if [[ -z "${libmpv_path}" ]]; then
+            echo "No libmpv*.dylib found in the macOS libmpv download." >&2
+            find "${mpv_root}/lib" -maxdepth 1 -type f | sort >&2
+            exit 1
+          fi
+
+          if [[ "$(basename "${libmpv_path}")" != "libmpv.dylib" ]]; then
+            cp -f "${libmpv_path}" "${mpv_root}/lib/libmpv.dylib"
+          fi
+
+          header_dir="$(find "${source_extract}" -type f -path '*/include/mpv/client.h' -print -quit)"
+          if [[ -n "${header_dir}" ]]; then
+            header_dir="$(dirname "${header_dir}")"
+          else
+            header_dir="$(find "${source_extract}" -type f -path '*/libmpv/client.h' -print -quit)"
+            if [[ -n "${header_dir}" ]]; then
+              header_dir="$(dirname "${header_dir}")"
+            fi
+          fi
+
+          if [[ -z "${header_dir}" ]]; then
+            echo "No mpv client.h found in the source archive under include/mpv or libmpv." >&2
+            find "${source_extract}" -maxdepth 5 -type f -name '*.h' | sort >&2
+            exit 1
+          fi
+
+          cp -f "${header_dir}"/*.h "${mpv_root}/include/mpv/"
+
+          test -f "${mpv_root}/include/mpv/client.h"
+          test -f "${mpv_root}/include/mpv/render.h"
+          test -f "${mpv_root}/include/mpv/render_gl.h"
+          test -f "${mpv_root}/include/mpv/stream_cb.h"
+          test -f "${mpv_root}/lib/libmpv.dylib"
+
+          echo "MPV_ROOT=${mpv_root}" >> "${GITHUB_ENV}"
+          echo "Prepared MPV_ROOT=${mpv_root}"
+          find "${mpv_root}" -maxdepth 3 -type f | sort
+
+      - name: Build app bundle
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          export CLEAN_BUILD_DIR=1
+          export CMAKE_OSX_ARCHITECTURES=x86_64
+          bash scripts/build-macos.sh
+
+      - name: Verify bundle
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          app="build/macos/${APP_NAME}.app"
+          exe="${app}/Contents/MacOS/${APP_NAME}"
+          frameworks="${app}/Contents/Frameworks"
+
+          test -d "${app}"
+          test -x "${exe}"
+          test -f "${frameworks}/libmpv.dylib"
+          otool -L "${exe}"
+          otool -L "${frameworks}/libmpv.dylib"
+
+      - name: Create zip
+        shell: bash
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -Eeuo pipefail
+          mkdir -p dist/macos
+          ditto -c -k --sequesterRsrc --keepParent \
+            "build/macos/${APP_NAME}.app" \
+            "dist/macos/${APP_NAME}-${VERSION}-macos-x86_64.zip"
+          test -f "dist/macos/${APP_NAME}-${VERSION}-macos-x86_64.zip"
+
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: lzc-player-${{ needs.prepare.outputs.version }}-macos-x86_64
+          path: dist/macos/lzc-player-${{ needs.prepare.outputs.version }}-macos-x86_64.zip
+          if-no-files-found: error
+
+  release:
+    name: Attach packages to release
+    runs-on: ubuntu-22.04
+    needs:
+      - prepare
+      - windows-x64
+      - linux-x64
+      - macos-x64
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist/release
+          merge-multiple: true
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/release/*

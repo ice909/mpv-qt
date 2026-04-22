@@ -5,7 +5,10 @@
 
 #include <QGuiApplication>
 #include <QMetaObject>
+#include <QFileInfo>
+#include <QLoggingCategory>
 #include <QStringList>
+#include <QTimer>
 #include <QtMath>
 
 #include "src/common/qthelper.hpp"
@@ -13,6 +16,8 @@
 
 namespace
 {
+
+Q_LOGGING_CATEGORY(lzcPlayerMpvSessionLog, "lzc-player.mpv-session")
 
 QString normalizedLanguage(QString language)
 {
@@ -42,8 +47,41 @@ void applyIpcServerOption(mpv_handle *mpv)
     const QString ipcServer = qApp->property("lzcPlayerInputIpcServer").toString();
     if (!ipcServer.isEmpty())
     {
-        mpv_set_option_string(mpv, "input-ipc-server", ipcServer.toUtf8().constData());
+        const QByteArray ipcServerUtf8 = ipcServer.toUtf8();
+        qInfo(lzcPlayerMpvSessionLog) << "Configuring mpv input IPC server:" << ipcServer;
+
+        const int err = mpv_set_option_string(mpv, "input-ipc-server", ipcServerUtf8.constData());
+        if (err < 0)
+        {
+            qWarning(lzcPlayerMpvSessionLog)
+                << "Failed to set mpv input-ipc-server to" << ipcServer
+                << "error:" << err
+                << mpv_error_string(err);
+            return;
+        }
+
+        qInfo(lzcPlayerMpvSessionLog) << "Configured mpv input-ipc-server:" << ipcServer;
     }
+    else
+    {
+        qInfo(lzcPlayerMpvSessionLog) << "mpv input IPC server is not configured";
+    }
+}
+
+void scheduleIpcSocketProbe(const QString &ipcServer)
+{
+    if (ipcServer.isEmpty())
+    {
+        return;
+    }
+
+    QTimer::singleShot(1000, qApp, [ipcServer]() {
+        const QFileInfo ipcInfo(ipcServer);
+        qInfo(lzcPlayerMpvSessionLog)
+            << "Checked mpv IPC socket path:" << ipcServer
+            << "exists:" << ipcInfo.exists()
+            << "absolute path:" << ipcInfo.absoluteFilePath();
+    });
 }
 
 std::optional<double> parseTimestampToSeconds(const QString &position)
@@ -112,11 +150,17 @@ MpvPlayerSession::MpvPlayerSession(QObject *parent)
     applyNetworkOptions(mpv);
     applyIpcServerOption(mpv);
 
-    if (mpv_initialize(mpv) < 0)
+    const int initErr = mpv_initialize(mpv);
+    if (initErr < 0)
     {
+        qWarning(lzcPlayerMpvSessionLog)
+            << "Failed to initialize mpv context:"
+            << initErr
+            << mpv_error_string(initErr);
         throw std::runtime_error("could not initialize mpv context");
     }
 
+    scheduleIpcSocketProbe(qApp->property("lzcPlayerInputIpcServer").toString());
     observeProperties();
     mpv_set_wakeup_callback(mpv, MpvPlayerSession::onMpvEvents, this);
 }
